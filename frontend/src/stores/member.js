@@ -22,6 +22,14 @@ export const useMemberStore = defineStore('member', {
         this.loading = false;
       }
     },
+    async fetchChannels() {
+      try {
+        return await api.get('/channels/flat');
+      } catch (error) {
+        console.error('Failed to fetch channels for member', error);
+        return [];
+      }
+    },
     async fetchStats() {
       try {
         const data = await api.get('/stats');

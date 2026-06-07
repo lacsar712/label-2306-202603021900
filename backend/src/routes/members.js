@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, applyChannelFilter } = require('../middleware/auth');
 const { MemberSchema, PointsUpdateSchema, SigninSchema, ExchangeSchema } = require('../validations/schemas');
 const { z } = require('zod');
 const { applyCampaigns, saveParticipations, ACTION_TYPES } = require('../utils/campaignService');
@@ -12,8 +12,8 @@ const CLOSED_TICKET_STATUSES = ['CLOSED', 'REJECTED'];
 // Get all members
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { search, level, status } = req.query;
-    const where = {};
+    const { search, level, status, channelId } = req.query;
+    let where = {};
 
     if (search) {
       where.OR = [
@@ -23,10 +23,14 @@ router.get('/', authenticate, async (req, res) => {
     }
     if (level) where.level = level;
     if (status) where.status = status;
+    if (channelId) where.sourceChannelId = parseInt(channelId);
+
+    where = await applyChannelFilter(req, where);
 
     const members = await prisma.member.findMany({
       where,
       include: {
+        sourceChannel: { select: { id: true, name: true, code: true } },
         _count: {
           select: {
             tickets: true,
@@ -52,6 +56,12 @@ router.get('/', authenticate, async (req, res) => {
       points: m.points,
       joinDate: m.joinDate,
       updatedAt: m.updatedAt,
+      sourceChannelId: m.sourceChannelId,
+      sourceChannel: m.sourceChannel,
+      firstTouchAt: m.firstTouchAt,
+      utmSource: m.utmSource,
+      utmMedium: m.utmMedium,
+      utmCampaign: m.utmCampaign,
       totalTickets: m._count.tickets,
       openTickets: m.tickets.length,
     }));

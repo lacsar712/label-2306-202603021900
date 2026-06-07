@@ -71,8 +71,26 @@
       </el-col>
     </el-row>
 
+    <div v-if="stats.channelAlerts && stats.channelAlerts.length > 0" class="alert-banner mt-24">
+      <el-alert
+        v-for="(alert, idx) in stats.channelAlerts"
+        :key="idx"
+        :title="alert.message"
+        :type="alert.severity === 'high' ? 'error' : 'warning'"
+        show-icon
+        :closable="false"
+        class="mb-8"
+      >
+        <template #default>
+          <el-button link type="primary" size="small" @click="$router.push('/channels')">
+            查看详情 →
+          </el-button>
+        </template>
+      </el-alert>
+    </div>
+
     <el-row :gutter="24" class="mt-24">
-      <el-col :span="16">
+      <el-col :span="12">
         <el-card class="chart-card" shadow="never">
           <template #header>
             <div class="card-header">
@@ -95,6 +113,44 @@
           </div>
         </el-card>
       </el-col>
+      <el-col :span="12">
+        <el-card class="chart-card" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span class="card-title">TOP5 获客渠道</span>
+              <el-button link type="primary" size="small" @click="$router.push('/channels')">
+                查看全部 →
+              </el-button>
+            </div>
+          </template>
+          <div class="channel-top-list">
+            <div
+              v-for="(ch, idx) in stats.topChannels || []"
+              :key="ch.id"
+              class="channel-top-item"
+            >
+              <span class="channel-rank" :class="'rank-' + (idx + 1)">{{ idx + 1 }}</span>
+              <span class="channel-top-name">{{ ch.name }}</span>
+              <div class="channel-top-bar">
+                <div
+                  class="channel-top-fill"
+                  :style="{
+                    width: getTopChannelPercent(ch.memberCount) + '%',
+                    backgroundColor: getChannelColor(idx)
+                  }"
+                />
+              </div>
+              <span class="channel-top-count">{{ ch.memberCount }}</span>
+            </div>
+            <div v-if="!stats.topChannels || stats.topChannels.length === 0" class="empty-channels">
+              <span>暂无渠道数据</span>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-row :gutter="24" class="mt-24">
       <el-col :span="8">
         <el-card class="action-card" shadow="never">
           <template #header>
@@ -109,6 +165,12 @@
               </el-button>
               <el-button type="warning" class="action-btn" @click="$router.push('/points')">
                 会员积分
+              </el-button>
+              <el-button type="success" class="action-btn" @click="$router.push('/channels')">
+                渠道分析
+              </el-button>
+              <el-button type="info" class="action-btn" @click="$router.push('/campaigns')">
+                营销活动
               </el-button>
             </div>
             <div class="tip-box">
@@ -170,6 +232,17 @@ const getRemainingTime = (endTime) => {
   if (days > 0) return `${days}天${hours}小时`;
   if (hours > 0) return `${hours}小时${minutes}分`;
   return `${minutes}分钟`;
+};
+
+const CHANNEL_COLORS = [
+  '#3b82f6', '#f97316', '#22c55e', '#a855f7', '#ef4444'
+];
+
+const getChannelColor = (idx) => CHANNEL_COLORS[idx % CHANNEL_COLORS.length];
+
+const getTopChannelPercent = (count) => {
+  const max = Math.max(...(stats.value.topChannels || []).map(c => c.memberCount), 1);
+  return Math.round((count / max) * 100);
 };
 
 onMounted(() => {
@@ -373,5 +446,82 @@ onUnmounted(() => {
   font-size: 13px;
   color: #64748b;
   line-height: 1.6;
+}
+
+.alert-banner {
+  margin-bottom: 4px;
+}
+
+.mb-8 { margin-bottom: 8px; }
+
+.channel-top-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 0;
+}
+
+.channel-top-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.channel-rank {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background-color: #f1f5f9;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.channel-rank.rank-1 { background-color: #fef3c7; color: #d97706; }
+.channel-rank.rank-2 { background-color: #e2e8f0; color: #475569; }
+.channel-rank.rank-3 { background-color: #ffedd5; color: #c2410c; }
+
+.channel-top-name {
+  font-size: 14px;
+  color: #334155;
+  width: 100px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-top-bar {
+  flex: 1;
+  height: 8px;
+  background-color: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.channel-top-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.channel-top-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  width: 50px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.empty-channels {
+  padding: 20px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 14px;
 }
 </style>

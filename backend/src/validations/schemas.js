@@ -7,6 +7,30 @@ const MemberSchema = z.object({
   level: z.enum(['NORMAL', 'SILVER', 'GOLD', 'PLATINUM']).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).optional(),
   points: z.number().int().optional(),
+  sourceChannelId: z.number().int().positive().optional().nullable(),
+  firstTouchAt: z.string().datetime().optional().nullable(),
+  utmSource: z.string().optional().nullable(),
+  utmMedium: z.string().optional().nullable(),
+  utmCampaign: z.string().optional().nullable(),
+});
+
+const ChannelSchema = z.object({
+  name: z.string().min(1).max(100),
+  code: z.string().min(1).max(50),
+  description: z.string().optional().nullable(),
+  parentId: z.number().int().positive().optional().nullable(),
+  level: z.number().int().min(1).optional(),
+  sortOrder: z.number().int().optional(),
+  managerId: z.number().int().positive().optional().nullable(),
+  isActive: z.boolean().optional(),
+  budget: z.number().positive().optional().nullable(),
+});
+
+const ChannelUpdateSchema = ChannelSchema.partial();
+
+const ChannelMergeSchema = z.object({
+  sourceIds: z.array(z.number().int().positive()).min(2),
+  targetId: z.number().int().positive(),
 });
 
 const PointsUpdateSchema = z.object({
@@ -129,4 +153,7 @@ module.exports = {
   CampaignStatusTransitionSchema,
   SigninSchema,
   ExchangeSchema,
+  ChannelSchema,
+  ChannelUpdateSchema,
+  ChannelMergeSchema,
 };

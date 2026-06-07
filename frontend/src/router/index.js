@@ -52,6 +52,11 @@ const router = createRouter({
           name: 'Campaigns',
           component: () => import('../views/CampaignList.vue'),
         },
+        {
+          path: 'channels',
+          name: 'Channels',
+          component: () => import('../views/ChannelAnalysis.vue'),
+        },
       ],
     },
   ],

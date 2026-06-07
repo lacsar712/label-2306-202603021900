@@ -21,20 +21,27 @@ model User {
   uploadedAttachments   TicketAttachment[]
   collaboratedTickets   TicketCollaborator[]   @relation("CollaboratedTickets")
   assignmentRules       TicketAssignmentRule[]
+  managedChannels       Channel[]              @relation("ChannelManagers")
 
   @@map("users")
 }
 
 model Member {
-  id        Int      @id @default(autoincrement())
-  name      String
-  phone     String   @unique
-  email     String?
-  level     MemberLevel @default(NORMAL)
-  status    MemberStatus @default(ACTIVE)
-  points    Int      @default(0)
-  joinDate  DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              Int         @id @default(autoincrement())
+  name            String
+  phone           String      @unique
+  email           String?
+  level           MemberLevel @default(NORMAL)
+  status          MemberStatus @default(ACTIVE)
+  points          Int         @default(0)
+  joinDate        DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  sourceChannelId Int?
+  sourceChannel   Channel?    @relation("MemberSourceChannel", fields: [sourceChannelId], references: [id])
+  firstTouchAt    DateTime?
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
 
   tickets   Ticket[]
   campaignParticipations CampaignParticipation[]
@@ -42,6 +49,7 @@ model Member {
   exchanges MemberExchange[]
   pointsLogs MemberPointsLog[]
 
+  @@index([sourceChannelId])
   @@map("members")
 }
 
@@ -256,4 +264,28 @@ model MemberPointsLog {
 
   @@index([memberId, createdAt])
   @@map("member_points_logs")
+}
+
+model Channel {
+  id          Int       @id @default(autoincrement())
+  name        String
+  code        String    @unique
+  description String?
+  parentId    Int?
+  parent      Channel?  @relation("ChannelTree", fields: [parentId], references: [id])
+  children    Channel[] @relation("ChannelTree")
+  level       Int       @default(1)
+  sortOrder   Int       @default(0)
+  managerId   Int?
+  manager     User?     @relation("ChannelManagers", fields: [managerId], references: [id])
+  isActive    Boolean   @default(true)
+  budget      Float?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members     Member[]  @relation("MemberSourceChannel")
+
+  @@index([parentId])
+  @@index([managerId])
+  @@map("channels")
 }

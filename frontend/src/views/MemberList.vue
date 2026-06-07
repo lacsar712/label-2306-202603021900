@@ -34,6 +34,14 @@
             <el-option label="黄金会员" value="GOLD" />
             <el-option label="铂金会员" value="PLATINUM" />
           </el-select>
+          <el-select v-model="filterChannel" placeholder="来源渠道" clearable @change="handleSearch" class="channel-select" filterable>
+            <el-option
+              v-for="ch in channelOptions"
+              :key="ch.id"
+              :label="ch.name"
+              :value="ch.id"
+            />
+          </el-select>
           <el-button type="primary" plain @click="handleSearch">搜索</el-button>
         </div>
       </div>
@@ -73,6 +81,14 @@
                 无进行中
               </el-tag>
             </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="来源渠道" min-width="140">
+          <template #default="{ row }">
+            <el-tag v-if="row.sourceChannel" type="primary" effect="plain" size="small">
+              {{ row.sourceChannel.name }}
+            </el-tag>
+            <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
         <el-table-column prop="status" label="状态" min-width="100">
@@ -144,6 +160,43 @@
             <el-radio label="SUSPENDED">已停用</el-radio>
           </el-radio-group>
         </el-form-item>
+        <el-divider content-position="left">来源信息</el-divider>
+        <el-form-item label="来源渠道" prop="sourceChannelId">
+          <el-select v-model="form.sourceChannelId" placeholder="请选择来源渠道" clearable filterable class="w-full">
+            <el-option
+              v-for="ch in channelOptions"
+              :key="ch.id"
+              :label="ch.name"
+              :value="ch.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="首次触达时间" prop="firstTouchAt">
+          <el-date-picker
+            v-model="form.firstTouchAt"
+            type="datetime"
+            placeholder="选择首次触达时间"
+            class="w-full"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+          />
+        </el-form-item>
+        <el-row :gutter="20">
+          <el-col :span="8">
+            <el-form-item label="UTM Source" prop="utmSource">
+              <el-input v-model="form.utmSource" placeholder="source" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="UTM Medium" prop="utmMedium">
+              <el-input v-model="form.utmMedium" placeholder="medium" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="UTM Campaign" prop="utmCampaign">
+              <el-input v-model="form.utmCampaign" placeholder="campaign" />
+            </el-form-item>
+          </el-col>
+        </el-row>
       </el-form>
       <template #footer>
         <el-button @click="showAddDialog = false">取消</el-button>
@@ -154,18 +207,22 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive } from 'vue';
+import { ref, onMounted, reactive, watch } from 'vue';
 import { useMemberStore } from '../stores/member';
+import { useChannelStore } from '../stores/channel';
 import dayjs from 'dayjs';
 import { ElMessage } from 'element-plus';
 
 const memberStore = useMemberStore();
+const channelStore = useChannelStore();
 const search = ref('');
 const filterLevel = ref('');
+const filterChannel = ref('');
 const showAddDialog = ref(false);
 const isEdit = ref(false);
 const submitting = ref(false);
 const formRef = ref(null);
+const channelOptions = ref([]);
 
 const form = reactive({
   id: null,
@@ -174,7 +231,12 @@ const form = reactive({
   email: '',
   level: 'NORMAL',
   points: 0,
-  status: 'ACTIVE'
+  status: 'ACTIVE',
+  sourceChannelId: null,
+  firstTouchAt: '',
+  utmSource: '',
+  utmMedium: '',
+  utmCampaign: ''
 });
 
 const rules = {
@@ -189,8 +251,13 @@ const rules = {
 const handleSearch = () => {
   memberStore.fetchMembers({
     search: search.value,
-    level: filterLevel.value
+    level: filterLevel.value,
+    channelId: filterChannel.value || undefined
   });
+};
+
+const loadChannels = async () => {
+  channelOptions.value = await memberStore.fetchChannels();
 };
 
 const handleEdit = (row) => {
@@ -213,6 +280,11 @@ const resetForm = () => {
   form.level = 'NORMAL';
   form.points = 0;
   form.status = 'ACTIVE';
+  form.sourceChannelId = null;
+  form.firstTouchAt = '';
+  form.utmSource = '';
+  form.utmMedium = '';
+  form.utmCampaign = '';
 };
 
 const submitForm = async () => {
@@ -260,6 +332,11 @@ const formatDate = (date) => dayjs(date).format('YYYY-MM-DD HH:mm');
 
 onMounted(() => {
   memberStore.fetchMembers();
+  loadChannels();
+});
+
+watch(showAddDialog, (val) => {
+  if (val) loadChannels();
 });
 </script>
 
@@ -319,6 +396,10 @@ onMounted(() => {
   width: 160px;
 }
 
+.channel-select {
+  width: 180px;
+}
+
 .mb-24 {
   margin-bottom: 24px;
 }
@@ -363,4 +444,8 @@ onMounted(() => {
 :deep(.el-tag--primary) { background-color: #eff6ff; color: #3b82f6; }
 :deep(.el-tag--warning) { background-color: #fff7ed; color: #f97316; }
 :deep(.el-tag--success) { background-color: #faf5ff; color: #a855f7; }
+
+.text-muted {
+  color: #94a3b8;
+}
 </style>

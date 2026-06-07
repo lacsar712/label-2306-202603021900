@@ -6,6 +6,7 @@ const memberRoutes = require('./routes/members');
 const systemRoutes = require('./routes/system');
 const ticketRoutes = require('./routes/tickets');
 const campaignRoutes = require('./routes/campaigns');
+const channelRoutes = require('./routes/channels');
 const logger = require('./utils/logger');
 
 const app = express();
@@ -20,6 +21,7 @@ app.use('/api/members', memberRoutes);
 app.use('/api/system', systemRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/campaigns', campaignRoutes);
+app.use('/api/channels', channelRoutes);
 // Compatibility for /api/stats which was at /api/stats in index.js
 app.use('/api', systemRoutes); 
 
