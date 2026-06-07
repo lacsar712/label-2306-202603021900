@@ -22,6 +22,11 @@ const router = createRouter({
           component: () => import('../views/Dashboard.vue'),
         },
         {
+          path: 'dashboard/customize',
+          name: 'DashboardCustomize',
+          component: () => import('../views/DashboardCustomize.vue'),
+        },
+        {
           path: 'members',
           name: 'Members',
           component: () => import('../views/MemberList.vue'),

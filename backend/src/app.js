@@ -9,6 +9,7 @@ const campaignRoutes = require('./routes/campaigns');
 const channelRoutes = require('./routes/channels');
 const checkinRoutes = require('./routes/checkins');
 const pointsExpiryRoutes = require('./routes/pointsExpiry');
+const dashboardRoutes = require('./routes/dashboard');
 const logger = require('./utils/logger');
 
 const app = express();
@@ -26,6 +27,7 @@ app.use('/api/campaigns', campaignRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/checkins', checkinRoutes);
 app.use('/api/points-expiry', pointsExpiryRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 // Compatibility for /api/stats which was at /api/stats in index.js
 app.use('/api', systemRoutes); 
 

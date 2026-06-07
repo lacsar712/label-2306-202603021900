@@ -22,6 +22,7 @@ model User {
   collaboratedTickets   TicketCollaborator[]   @relation("CollaboratedTickets")
   assignmentRules       TicketAssignmentRule[]
   managedChannels       Channel[]              @relation("ChannelManagers")
+  dashboardConfig       DashboardConfig?
 
   @@map("users")
 }
@@ -403,4 +404,49 @@ model PointsReminderLog {
 
   @@index([memberId, createdAt])
   @@map("points_reminder_logs")
+}
+
+enum DashboardComponentType {
+  STAT_CARD
+  LEVEL_DISTRIBUTION
+  CHANNEL_PIE
+  BIRTHDAY_REMINDER
+  CAMPAIGN_BANNER
+  CHECKIN_TREND
+  TICKET_SLA
+  POINTS_EXPIRY
+}
+
+model DashboardComponent {
+  id               Int                @id @default(autoincrement())
+  type             DashboardComponentType
+  title            String
+  x                Int                @default(0)
+  y                Int                @default(0)
+  width            Int                @default(6)
+  height           Int                @default(6)
+  visible          Boolean          @default(true)
+  refreshInterval  Int              @default(0)
+  timeRange        String?
+  config           Json?
+  order            Int              @default(0)
+  dashboardConfigId Int
+  dashboardConfig  DashboardConfig @relation(fields: [dashboardConfigId], references: [id], onDelete: Cascade)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([dashboardConfigId])
+  @@map("dashboard_components")
+}
+
+model DashboardConfig {
+  id               Int                @id @default(autoincrement())
+  userId           Int                @unique
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isDefaultTemplate Boolean          @default(false)
+  components       DashboardComponent[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@map("dashboard_configs")
 }

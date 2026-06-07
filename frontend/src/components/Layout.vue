@@ -92,10 +92,14 @@ const authStore = useAuthStore();
 
 const activeMenu = computed(() => {
   if (route.path.startsWith('/tickets')) return '/tickets';
+  if (route.path.startsWith('/dashboard')) return '/';
   return route.path;
 });
 const currentPageName = computed(() => {
-  if (route.path === '/') return '数据概览';
+  if (route.path === '/' || route.path.startsWith('/dashboard')) {
+    if (route.path.includes('customize')) return '看板配置';
+    return '数据概览';
+  }
   if (route.path === '/members') return '会员列表';
   if (route.path.startsWith('/tickets')) {
     if (route.params.id) return '工单详情';
