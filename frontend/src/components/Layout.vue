@@ -26,6 +26,10 @@
           <el-icon><Setting /></el-icon>
           <span>系统管理</span>
         </el-menu-item>
+        <el-menu-item index="/campaigns">
+          <el-icon><Present /></el-icon>
+          <span>营销活动</span>
+        </el-menu-item>
       </el-menu>
       <div class="sidebar-footer">
         <el-button link @click="handleLogout" class="logout-btn">
@@ -67,7 +71,7 @@
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
-import { DataAnalysis, User, Setting, SwitchButton, UserFilled, Tickets } from '@element-plus/icons-vue';
+import { DataAnalysis, User, Setting, SwitchButton, UserFilled, Tickets, Present } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 
 const route = useRoute();
@@ -86,6 +90,7 @@ const currentPageName = computed(() => {
     return '工单管理';
   }
   if (route.path === '/system') return '系统管理';
+  if (route.path === '/campaigns') return '营销活动';
   return '';
 });
 

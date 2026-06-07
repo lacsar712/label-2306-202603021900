@@ -37,6 +37,10 @@ model Member {
   updatedAt DateTime @updatedAt
 
   tickets   Ticket[]
+  campaignParticipations CampaignParticipation[]
+  signins   MemberSignin[]
+  exchanges MemberExchange[]
+  pointsLogs MemberPointsLog[]
 
   @@map("members")
 }
@@ -151,4 +155,105 @@ model TicketAssignmentRule {
   updatedAt       DateTime         @updatedAt
 
   @@map("ticket_assignment_rules")
+}
+
+enum CampaignType {
+  DOUBLE_POINTS
+  SPEND_GIFT_POINTS
+  LEVEL_BONUS
+  SIGNIN_DOUBLE
+  EXCHANGE_DISCOUNT
+}
+
+enum CampaignStatus {
+  DRAFT
+  PENDING_REVIEW
+  ACTIVE
+  ENDED
+  VOID
+}
+
+model Campaign {
+  id                Int              @id @default(autoincrement())
+  name              String
+  type              CampaignType
+  ruleParams        Json
+  startTime         DateTime
+  endTime           DateTime
+  applicableLevels  Json?
+  applicableTags    Json?
+  applicableChannels Json?
+  participationLimit Int             @default(0)
+  mutualExclusionGroup String?
+  priority          Int              @default(0)
+  status            CampaignStatus   @default(DRAFT)
+  enabled           Boolean          @default(true)
+  createdBy         Int?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  participations    CampaignParticipation[]
+  pointsLogs        MemberPointsLog[]
+
+  @@index([status, startTime, endTime])
+  @@map("campaigns")
+}
+
+model CampaignParticipation {
+  id           Int        @id @default(autoincrement())
+  campaignId   Int
+  campaign     Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  memberId     Int
+  member       Member     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  actionType   String
+  originalValue Int
+  bonusValue    Int
+  finalValue    Int
+  ruleHitDetail Json?
+  createdAt    DateTime   @default(now())
+
+  @@index([campaignId, createdAt])
+  @@index([memberId, createdAt])
+  @@map("campaign_participations")
+}
+
+model MemberSignin {
+  id         Int      @id @default(autoincrement())
+  memberId   Int
+  member     Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  signinDate DateTime @db.Date
+  points     Int      @default(10)
+  createdAt  DateTime @default(now())
+
+  @@unique([memberId, signinDate])
+  @@index([memberId, signinDate])
+  @@map("member_signins")
+}
+
+model MemberExchange {
+  id            Int      @id @default(autoincrement())
+  memberId      Int
+  member        Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  itemName      String
+  originalPoints Int
+  finalPoints   Int
+  createdAt     DateTime @default(now())
+
+  @@index([memberId, createdAt])
+  @@map("member_exchanges")
+}
+
+model MemberPointsLog {
+  id            Int      @id @default(autoincrement())
+  memberId      Int
+  member        Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  changePoints  Int
+  balanceAfter  Int
+  reason        String
+  campaignId    Int?
+  campaign      Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+
+  @@index([memberId, createdAt])
+  @@map("member_points_logs")
 }

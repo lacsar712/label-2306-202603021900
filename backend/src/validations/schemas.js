@@ -77,6 +77,41 @@ const TicketListQuerySchema = z.object({
   pageSize: z.string().optional(),
 });
 
+const CampaignTypeSchema = z.enum(['DOUBLE_POINTS', 'SPEND_GIFT_POINTS', 'LEVEL_BONUS', 'SIGNIN_DOUBLE', 'EXCHANGE_DISCOUNT']);
+const CampaignStatusSchema = z.enum(['DRAFT', 'PENDING_REVIEW', 'ACTIVE', 'ENDED', 'VOID']);
+
+const CampaignSchema = z.object({
+  name: z.string().min(1).max(200),
+  type: CampaignTypeSchema,
+  ruleParams: z.record(z.any()),
+  startTime: z.string().datetime(),
+  endTime: z.string().datetime(),
+  applicableLevels: z.array(z.enum(['NORMAL', 'SILVER', 'GOLD', 'PLATINUM'])).optional().nullable(),
+  applicableTags: z.array(z.string()).optional().nullable(),
+  applicableChannels: z.array(z.string()).optional().nullable(),
+  participationLimit: z.number().int().min(0).optional(),
+  mutualExclusionGroup: z.string().optional().nullable(),
+  priority: z.number().int().optional(),
+  status: CampaignStatusSchema.optional(),
+  enabled: z.boolean().optional(),
+});
+
+const CampaignUpdateSchema = CampaignSchema.partial();
+
+const CampaignStatusTransitionSchema = z.object({
+  status: CampaignStatusSchema,
+});
+
+const SigninSchema = z.object({
+  memberId: z.number().int().positive(),
+});
+
+const ExchangeSchema = z.object({
+  memberId: z.number().int().positive(),
+  itemName: z.string().min(1),
+  points: z.number().int().positive(),
+});
+
 module.exports = {
   MemberSchema,
   PointsUpdateSchema,
@@ -89,4 +124,9 @@ module.exports = {
   TicketCollaboratorSchema,
   AssignmentRuleSchema,
   TicketListQuerySchema,
+  CampaignSchema,
+  CampaignUpdateSchema,
+  CampaignStatusTransitionSchema,
+  SigninSchema,
+  ExchangeSchema,
 };

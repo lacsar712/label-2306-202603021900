@@ -47,6 +47,11 @@ const router = createRouter({
           component: () => import('../views/SystemManagement.vue'),
           meta: { requiresAdmin: true }
         },
+        {
+          path: 'campaigns',
+          name: 'Campaigns',
+          component: () => import('../views/CampaignList.vue'),
+        },
       ],
     },
   ],

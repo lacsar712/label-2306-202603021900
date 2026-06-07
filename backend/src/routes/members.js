@@ -3,8 +3,9 @@ const router = express.Router();
 const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
 const { authenticate } = require('../middleware/auth');
-const { MemberSchema, PointsUpdateSchema } = require('../validations/schemas');
+const { MemberSchema, PointsUpdateSchema, SigninSchema, ExchangeSchema } = require('../validations/schemas');
 const { z } = require('zod');
+const { applyCampaigns, saveParticipations, ACTION_TYPES } = require('../utils/campaignService');
 
 const CLOSED_TICKET_STATUSES = ['CLOSED', 'REJECTED'];
 
@@ -197,22 +198,207 @@ router.post('/:id/points', authenticate, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { points } = PointsUpdateSchema.parse(req.body);
-    
-    const member = await prisma.member.update({
-      where: { id },
-      data: {
-        points: {
-          increment: points
-        }
-      }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const member = await tx.member.findUnique({ where: { id } });
+      if (!member) throw Object.assign(new Error('Member not found'), { status: 404 });
+
+      const applied = points > 0
+        ? await applyCampaigns(ACTION_TYPES.POINTS_ADJUST, id, points)
+        : { finalValue: points, totalBonus: 0, participations: [] };
+
+      const updatedMember = await tx.member.update({
+        where: { id },
+        data: { points: { increment: applied.finalValue } },
+      });
+
+      await tx.memberPointsLog.create({
+        data: {
+          memberId: id,
+          changePoints: applied.finalValue,
+          balanceAfter: member.points + applied.finalValue,
+          reason: 'POINTS_ADJUST',
+          campaignId: applied.participations.length > 0 ? applied.participations[0].campaignId : null,
+        },
+      });
+
+      await saveParticipations(applied.participations, tx);
+
+      return {
+        member: updatedMember,
+        originalPoints: points,
+        bonusPoints: applied.totalBonus,
+        finalPoints: applied.finalValue,
+        campaignsHit: applied.participations.map((p) => p.ruleHitDetail),
+      };
     });
-    
-    res.json(member);
+
+    res.json(result);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.errors });
     }
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message });
+    }
     logger.error('Error updating member points', { id: req.params.id, error: error.message });
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Member signin
+router.post('/signin', authenticate, async (req, res) => {
+  try {
+    const { memberId } = SigninSchema.parse(req.body);
+    const today = new Date();
+    const signinDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const basePoints = 10;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const existing = await tx.memberSignin.findFirst({
+        where: { memberId, signinDate },
+      });
+      if (existing) throw Object.assign(new Error('Already signed in today'), { status: 400 });
+
+      const member = await tx.member.findUnique({ where: { id: memberId } });
+      if (!member) throw Object.assign(new Error('Member not found'), { status: 404 });
+
+      const applied = await applyCampaigns(ACTION_TYPES.SIGNIN, memberId, basePoints);
+
+      const signin = await tx.memberSignin.create({
+        data: { memberId, signinDate, points: applied.finalValue },
+      });
+
+      await tx.member.update({
+        where: { id: memberId },
+        data: { points: { increment: applied.finalValue } },
+      });
+
+      await tx.memberPointsLog.create({
+        data: {
+          memberId,
+          changePoints: applied.finalValue,
+          balanceAfter: member.points + applied.finalValue,
+          reason: 'SIGNIN',
+          campaignId: applied.participations.length > 0 ? applied.participations[0].campaignId : null,
+        },
+      });
+
+      await saveParticipations(applied.participations, tx);
+
+      return {
+        signin,
+        basePoints,
+        bonusPoints: applied.totalBonus,
+        finalPoints: applied.finalValue,
+        campaignsHit: applied.participations.map((p) => p.ruleHitDetail),
+      };
+    });
+
+    res.json(result);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors });
+    }
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    logger.error('Error during signin', { error: error.message });
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Get member signin history
+router.get('/:id/signins', authenticate, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const signins = await prisma.memberSignin.findMany({
+      where: { memberId: id },
+      orderBy: { signinDate: 'desc' },
+    });
+    res.json(signins);
+  } catch (error) {
+    logger.error('Error fetching signins', { id: req.params.id, error: error.message });
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Member exchange
+router.post('/exchange', authenticate, async (req, res) => {
+  try {
+    const { memberId, itemName, points } = ExchangeSchema.parse(req.body);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const member = await tx.member.findUnique({ where: { id: memberId } });
+      if (!member) throw Object.assign(new Error('Member not found'), { status: 404 });
+
+      const applied = await applyCampaigns(ACTION_TYPES.EXCHANGE, memberId, points);
+      const discounted = points - applied.totalBonus;
+      if (discounted < 0) throw Object.assign(new Error('Invalid discount calculation'), { status: 500 });
+      if (member.points < discounted) throw Object.assign(new Error('Insufficient points'), { status: 400 });
+
+      const exchange = await tx.memberExchange.create({
+        data: {
+          memberId,
+          itemName,
+          originalPoints: points,
+          finalPoints: discounted,
+        },
+      });
+
+      await tx.member.update({
+        where: { id: memberId },
+        data: { points: { decrement: discounted } },
+      });
+
+      await tx.memberPointsLog.create({
+        data: {
+          memberId,
+          changePoints: -discounted,
+          balanceAfter: member.points - discounted,
+          reason: 'EXCHANGE',
+          campaignId: applied.participations.length > 0 ? applied.participations[0].campaignId : null,
+        },
+      });
+
+      await saveParticipations(applied.participations, tx);
+
+      return {
+        exchange,
+        originalPoints: points,
+        discountPoints: applied.totalBonus,
+        finalPoints: discounted,
+        campaignsHit: applied.participations.map((p) => p.ruleHitDetail),
+      };
+    });
+
+    res.json(result);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors });
+    }
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    logger.error('Error during exchange', { error: error.message });
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Get member points logs
+router.get('/:id/points-logs', authenticate, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const logs = await prisma.memberPointsLog.findMany({
+      where: { memberId: id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        campaign: { select: { id: true, name: true } },
+      },
+    });
+    res.json(logs);
+  } catch (error) {
+    logger.error('Error fetching points logs', { id: req.params.id, error: error.message });
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
