@@ -18,6 +18,10 @@
           <el-icon><User /></el-icon>
           <span>会员列表</span>
         </el-menu-item>
+        <el-menu-item index="/tickets">
+          <el-icon><Tickets /></el-icon>
+          <span>工单管理</span>
+        </el-menu-item>
         <el-menu-item v-if="authStore.isAdmin" index="/system">
           <el-icon><Setting /></el-icon>
           <span>系统管理</span>
@@ -63,17 +67,24 @@
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
-import { DataAnalysis, User, Setting, SwitchButton, UserFilled } from '@element-plus/icons-vue';
+import { DataAnalysis, User, Setting, SwitchButton, UserFilled, Tickets } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 
-const activeMenu = computed(() => route.path);
+const activeMenu = computed(() => {
+  if (route.path.startsWith('/tickets')) return '/tickets';
+  return route.path;
+});
 const currentPageName = computed(() => {
   if (route.path === '/') return '数据概览';
   if (route.path === '/members') return '会员列表';
+  if (route.path.startsWith('/tickets')) {
+    if (route.params.id) return '工单详情';
+    return '工单管理';
+  }
   if (route.path === '/system') return '系统管理';
   return '';
 });

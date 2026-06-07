@@ -6,12 +6,14 @@ const { authenticate } = require('../middleware/auth');
 const { MemberSchema, PointsUpdateSchema } = require('../validations/schemas');
 const { z } = require('zod');
 
+const CLOSED_TICKET_STATUSES = ['CLOSED', 'REJECTED'];
+
 // Get all members
 router.get('/', authenticate, async (req, res) => {
   try {
     const { search, level, status } = req.query;
     const where = {};
-    
+
     if (search) {
       where.OR = [
         { name: { contains: search } },
@@ -23,11 +25,116 @@ router.get('/', authenticate, async (req, res) => {
 
     const members = await prisma.member.findMany({
       where,
+      include: {
+        _count: {
+          select: {
+            tickets: true,
+          },
+        },
+        tickets: {
+          where: {
+            status: { notIn: CLOSED_TICKET_STATUSES },
+          },
+          select: { id: true },
+        },
+      },
       orderBy: { joinDate: 'desc' }
     });
-    res.json(members);
+
+    const enriched = members.map((m) => ({
+      id: m.id,
+      name: m.name,
+      phone: m.phone,
+      email: m.email,
+      level: m.level,
+      status: m.status,
+      points: m.points,
+      joinDate: m.joinDate,
+      updatedAt: m.updatedAt,
+      totalTickets: m._count.tickets,
+      openTickets: m.tickets.length,
+    }));
+
+    res.json(enriched);
   } catch (error) {
     logger.error('Error fetching members', { error: error.message });
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Get member ticket summary
+router.get('/:id/tickets-summary', authenticate, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const member = await prisma.member.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: { tickets: true },
+        },
+        tickets: {
+          select: {
+            id: true,
+            status: true,
+            priority: true,
+            category: true,
+            satisfaction: true,
+          },
+        },
+      },
+    });
+
+    if (!member) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+
+    const tickets = member.tickets;
+    const openTickets = tickets.filter((t) => !CLOSED_TICKET_STATUSES.includes(t.status)).length;
+    const closedTickets = tickets.filter((t) => CLOSED_TICKET_STATUSES.includes(t.status)).length;
+    const ratedTickets = tickets.filter((t) => t.satisfaction !== null);
+    const avgSatisfaction = ratedTickets.length > 0
+      ? ratedTickets.reduce((s, t) => s + t.satisfaction, 0) / ratedTickets.length
+      : null;
+
+    const byCategory = {};
+    for (const t of tickets) {
+      byCategory[t.category] = (byCategory[t.category] || 0) + 1;
+    }
+
+    res.json({
+      memberId: id,
+      totalTickets: member._count.tickets,
+      openTickets,
+      closedTickets,
+      avgSatisfaction: avgSatisfaction ? Math.round(avgSatisfaction * 10) / 10 : null,
+      byCategory,
+    });
+  } catch (error) {
+    logger.error('Error fetching member ticket summary', { id: req.params.id, error: error.message });
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Get member tickets
+router.get('/:id/tickets', authenticate, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { status } = req.query;
+    const where = { memberId: id };
+    if (status) where.status = status;
+
+    const tickets = await prisma.ticket.findMany({
+      where,
+      include: {
+        assignee: { select: { id: true, username: true } },
+        _count: { select: { replies: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json(tickets);
+  } catch (error) {
+    logger.error('Error fetching member tickets', { id: req.params.id, error: error.message });
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });

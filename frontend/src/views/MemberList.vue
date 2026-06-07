@@ -55,6 +55,26 @@
           </template>
         </el-table-column>
         <el-table-column prop="points" label="积分" min-width="80" />
+        <el-table-column label="工单统计" min-width="160">
+          <template #default="{ row }">
+            <div class="ticket-stats">
+              <el-tag type="info" size="small" effect="plain">
+                总计 {{ row.totalTickets || 0 }}
+              </el-tag>
+              <el-tag
+                v-if="(row.openTickets || 0) > 0"
+                type="warning"
+                size="small"
+                effect="dark"
+              >
+                未关闭 {{ row.openTickets || 0 }}
+              </el-tag>
+              <el-tag v-else type="success" size="small" effect="plain">
+                无进行中
+              </el-tag>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" min-width="100">
           <template #default="{ row }">
             <el-badge :is-dot="true" :type="getStatusType(row.status)">
@@ -67,10 +87,11 @@
             {{ formatDate(row.joinDate) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="180">
+        <el-table-column label="操作" fixed="right" width="260">
           <template #default="{ row }">
             <el-button link @click="handleEdit(row)">编辑</el-button>
             <el-button link type="warning" @click="$router.push({ path: '/points', query: { memberId: row.id } })">积分</el-button>
+            <el-button link type="primary" @click="$router.push({ path: '/tickets', query: { memberId: row.id } })">工单</el-button>
             <el-popconfirm title="确定删除该会员吗？" @confirm="handleDelete(row.id)">
               <template #reference>
                 <el-button link type="danger">删除</el-button>
@@ -312,6 +333,12 @@ onMounted(() => {
 
 .w-full {
   width: 100%;
+}
+
+.ticket-stats {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 :deep(.member-row) {

@@ -9,12 +9,18 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
-  password  String
-  role      String   @default("ADMIN")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                    Int                    @id @default(autoincrement())
+  username              String                 @unique
+  password              String
+  role                  String                 @default("ADMIN")
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  assignedTickets       Ticket[]               @relation("AssignedTickets")
+  ticketReplies         TicketReply[]
+  uploadedAttachments   TicketAttachment[]
+  collaboratedTickets   TicketCollaborator[]   @relation("CollaboratedTickets")
+  assignmentRules       TicketAssignmentRule[]
 
   @@map("users")
 }
@@ -30,6 +36,8 @@ model Member {
   joinDate  DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  tickets   Ticket[]
+
   @@map("members")
 }
 
@@ -44,4 +52,103 @@ enum MemberStatus {
   ACTIVE
   INACTIVE
   SUSPENDED
+}
+
+enum TicketCategory {
+  CONSULTATION
+  COMPLAINT
+  SUGGESTION
+  AFTERSALE
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  PENDING_ASSIGN
+  PENDING_PROCESS
+  PROCESSING
+  PENDING_REVIEW
+  CLOSED
+  REJECTED
+}
+
+model Ticket {
+  id              Int              @id @default(autoincrement())
+  memberId        Int
+  member          Member           @relation(fields: [memberId], references: [id])
+  title           String
+  content         String
+  category        TicketCategory
+  priority        TicketPriority   @default(MEDIUM)
+  status          TicketStatus     @default(PENDING_ASSIGN)
+  assigneeId      Int?
+  assignee        User?            @relation("AssignedTickets", fields: [assigneeId], references: [id])
+  slaDeadline     DateTime?
+  satisfaction    Int?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  replies         TicketReply[]
+  attachments     TicketAttachment[]
+  collaborators   TicketCollaborator[]
+
+  @@map("tickets")
+}
+
+model TicketReply {
+  id              Int              @id @default(autoincrement())
+  ticketId        Int
+  ticket          Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId          Int?
+  user            User?            @relation(fields: [userId], references: [id])
+  content         String
+  actionType      String?
+  actionDetail    String?
+  createdAt       DateTime         @default(now())
+
+  @@map("ticket_replies")
+}
+
+model TicketAttachment {
+  id              Int              @id @default(autoincrement())
+  ticketId        Int
+  ticket          Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fileName        String
+  fileUrl         String
+  fileType        String
+  fileSize        Int?
+  uploaderId      Int?
+  uploader        User?            @relation(fields: [uploaderId], references: [id])
+  createdAt       DateTime         @default(now())
+
+  @@map("ticket_attachments")
+}
+
+model TicketCollaborator {
+  id              Int              @id @default(autoincrement())
+  ticketId        Int
+  ticket          Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId          Int
+  user            User             @relation("CollaboratedTickets", fields: [userId], references: [id])
+  createdAt       DateTime         @default(now())
+
+  @@unique([ticketId, userId])
+  @@map("ticket_collaborators")
+}
+
+model TicketAssignmentRule {
+  id              Int              @id @default(autoincrement())
+  category        TicketCategory   @unique
+  defaultAssigneeId Int
+  defaultAssignee User             @relation(fields: [defaultAssigneeId], references: [id])
+  slaHours        Int              @default(24)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("ticket_assignment_rules")
 }

@@ -32,6 +32,16 @@ const router = createRouter({
           component: () => import('../views/MemberPoints.vue'),
         },
         {
+          path: 'tickets',
+          name: 'Tickets',
+          component: () => import('../views/TicketList.vue'),
+        },
+        {
+          path: 'tickets/:id',
+          name: 'TicketDetail',
+          component: () => import('../views/TicketDetail.vue'),
+        },
+        {
           path: 'system',
           name: 'System',
           component: () => import('../views/SystemManagement.vue'),
