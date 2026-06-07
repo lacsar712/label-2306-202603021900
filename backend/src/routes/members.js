@@ -6,6 +6,7 @@ const { authenticate, applyChannelFilter } = require('../middleware/auth');
 const { MemberSchema, PointsUpdateSchema, SigninSchema, ExchangeSchema } = require('../validations/schemas');
 const { z } = require('zod');
 const { applyCampaigns, saveParticipations, ACTION_TYPES } = require('../utils/campaignService');
+const { createPointsLedger, consumePointsByFIFO } = require('../utils/pointsExpiryService');
 
 const CLOSED_TICKET_STATUSES = ['CLOSED', 'REJECTED'];
 
@@ -217,12 +218,19 @@ router.post('/:id/points', authenticate, async (req, res) => {
         ? await applyCampaigns(ACTION_TYPES.POINTS_ADJUST, id, points)
         : { finalValue: points, totalBonus: 0, participations: [] };
 
+      if (applied.finalValue < 0) {
+        const { consumed, insufficient } = await consumePointsByFIFO(tx, id, Math.abs(applied.finalValue));
+        if (insufficient) {
+          throw Object.assign(new Error('Insufficient points in ledger'), { status: 400 });
+        }
+      }
+
       const updatedMember = await tx.member.update({
         where: { id },
         data: { points: { increment: applied.finalValue } },
       });
 
-      await tx.memberPointsLog.create({
+      const log = await tx.memberPointsLog.create({
         data: {
           memberId: id,
           changePoints: applied.finalValue,
@@ -231,6 +239,17 @@ router.post('/:id/points', authenticate, async (req, res) => {
           campaignId: applied.participations.length > 0 ? applied.participations[0].campaignId : null,
         },
       });
+
+      if (applied.finalValue > 0) {
+        await createPointsLedger(tx, {
+          memberId: id,
+          points: applied.finalValue,
+          sourceType: 'ADJUST',
+          campaignId: applied.participations.length > 0 ? applied.participations[0].campaignId : null,
+          sourceLogId: log.id,
+          reason: 'POINTS_ADJUST',
+        });
+      }
 
       await saveParticipations(applied.participations, tx);
 
@@ -284,7 +303,7 @@ router.post('/signin', authenticate, async (req, res) => {
         data: { points: { increment: applied.finalValue } },
       });
 
-      await tx.memberPointsLog.create({
+      const log = await tx.memberPointsLog.create({
         data: {
           memberId,
           changePoints: applied.finalValue,
@@ -293,6 +312,17 @@ router.post('/signin', authenticate, async (req, res) => {
           campaignId: applied.participations.length > 0 ? applied.participations[0].campaignId : null,
         },
       });
+
+      if (applied.finalValue > 0) {
+        await createPointsLedger(tx, {
+          memberId,
+          points: applied.finalValue,
+          sourceType: 'SIGNIN',
+          campaignId: applied.participations.length > 0 ? applied.participations[0].campaignId : null,
+          sourceLogId: log.id,
+          reason: 'SIGNIN',
+        });
+      }
 
       await saveParticipations(applied.participations, tx);
 
@@ -346,6 +376,11 @@ router.post('/exchange', authenticate, async (req, res) => {
       const discounted = points - applied.totalBonus;
       if (discounted < 0) throw Object.assign(new Error('Invalid discount calculation'), { status: 500 });
       if (member.points < discounted) throw Object.assign(new Error('Insufficient points'), { status: 400 });
+
+      const { consumed, insufficient } = await consumePointsByFIFO(tx, memberId, discounted);
+      if (insufficient) {
+        throw Object.assign(new Error('Insufficient points in ledger'), { status: 400 });
+      }
 
       const exchange = await tx.memberExchange.create({
         data: {

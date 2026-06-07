@@ -62,6 +62,12 @@ const router = createRouter({
           name: 'Checkin',
           component: () => import('../views/CheckinManagement.vue'),
         },
+        {
+          path: 'points-expiry',
+          name: 'PointsExpiry',
+          component: () => import('../views/PointsExpiry.vue'),
+          meta: { requiresAdmin: true }
+        },
       ],
     },
   ],

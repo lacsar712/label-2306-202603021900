@@ -34,6 +34,7 @@ model Member {
   level           MemberLevel @default(NORMAL)
   status          MemberStatus @default(ACTIVE)
   points          Int         @default(0)
+  frozenPoints    Int         @default(0)
   joinDate        DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   sourceChannelId Int?
@@ -48,6 +49,8 @@ model Member {
   signins   MemberSignin[]
   exchanges MemberExchange[]
   pointsLogs MemberPointsLog[]
+  pointsLedgers PointsLedger[]
+  reminderLogs PointsReminderLog[]
 
   @@index([sourceChannelId])
   @@map("members")
@@ -303,4 +306,101 @@ model Channel {
   @@index([parentId])
   @@index([managerId])
   @@map("channels")
+}
+
+enum PointsSourceType {
+  CONSUMPTION
+  ACTIVITY
+  SIGNIN
+  ADJUST
+  EXCHANGE_REFUND
+  OTHER
+}
+
+enum ExpiryHandleType {
+  CLEAR_ALL
+  FIFO_DEDUCT
+  TRANSFER_FROZEN
+}
+
+enum PointsLedgerStatus {
+  ACTIVE
+  CONSUMED
+  EXPIRED
+  FROZEN
+  EXEMPTED
+}
+
+model PointsExpiryRule {
+  id               Int                @id @default(autoincrement())
+  name             String
+  sourceType       PointsSourceType   @unique
+  validDays        Int
+  isEnabled        Boolean            @default(true)
+  reminderDays     Json               @default("[]")
+  handleType       ExpiryHandleType   @default(CLEAR_ALL)
+  createdBy        Int?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  ledgers          PointsLedger[]
+
+  @@map("points_expiry_rules")
+}
+
+model PointsLedger {
+  id               Int                @id @default(autoincrement())
+  memberId         Int
+  member           Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  ruleId           Int?
+  rule             PointsExpiryRule?  @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  sourceType       PointsSourceType
+  originalPoints   Int
+  remainingPoints  Int
+  earnedAt         DateTime           @default(now())
+  expireAt         DateTime
+  status           PointsLedgerStatus @default(ACTIVE)
+  sourceLogId      Int?
+  campaignId       Int?
+  exempted         Boolean            @default(false)
+  extendedDays     Int                @default(0)
+  remark           String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  reminderLogs     PointsReminderLog[]
+
+  @@index([memberId, status, expireAt])
+  @@index([expireAt, status])
+  @@map("points_ledger")
+}
+
+model PointsExpiryExecution {
+  id               Int                @id @default(autoincrement())
+  executionDate    DateTime           @db.Date
+  totalExpiredPoints Int              @default(0)
+  affectedMembers  Int                @default(0)
+  totalFrozenPoints Int               @default(0)
+  handledType      ExpiryHandleType
+  detailJson       Json?
+  createdAt        DateTime           @default(now())
+
+  @@unique([executionDate, handledType])
+  @@map("points_expiry_executions")
+}
+
+model PointsReminderLog {
+  id               Int                @id @default(autoincrement())
+  memberId         Int
+  member           Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  ledgerId         Int
+  ledger           PointsLedger       @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  reminderDays     Int
+  pointsAmount     Int
+  expireAt         DateTime
+  notified         Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+
+  @@index([memberId, createdAt])
+  @@map("points_reminder_logs")
 }

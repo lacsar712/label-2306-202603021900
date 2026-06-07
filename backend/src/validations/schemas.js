@@ -33,6 +33,38 @@ const ChannelMergeSchema = z.object({
   targetId: z.number().int().positive(),
 });
 
+const PointsSourceTypeSchema = z.enum(['CONSUMPTION', 'ACTIVITY', 'SIGNIN', 'ADJUST', 'EXCHANGE_REFUND', 'OTHER']);
+const ExpiryHandleTypeSchema = z.enum(['CLEAR_ALL', 'FIFO_DEDUCT', 'TRANSFER_FROZEN']);
+
+const PointsExpiryRuleSchema = z.object({
+  name: z.string().min(1).max(100),
+  sourceType: PointsSourceTypeSchema,
+  validDays: z.number().int().min(1),
+  isEnabled: z.boolean().optional(),
+  reminderDays: z.array(z.number().int().min(1)).optional(),
+  handleType: ExpiryHandleTypeSchema.optional(),
+});
+
+const PointsExpiryRuleUpdateSchema = PointsExpiryRuleSchema.partial();
+
+const PointsExtendSchema = z.object({
+  ledgerIds: z.array(z.number().int().positive()).optional(),
+  extendDays: z.number().int().min(1),
+  remark: z.string().optional().nullable(),
+});
+
+const PointsExemptSchema = z.object({
+  ledgerIds: z.array(z.number().int().positive()).optional(),
+  remark: z.string().optional().nullable(),
+});
+
+const PointsLedgerQuerySchema = z.object({
+  memberId: z.string().optional(),
+  status: z.enum(['ACTIVE', 'CONSUMED', 'EXPIRED', 'FROZEN', 'EXEMPTED']).optional(),
+  expiringSoon: z.enum(['true', 'false']).optional(),
+  expired: z.enum(['true', 'false']).optional(),
+});
+
 const PointsUpdateSchema = z.object({
   points: z.number().int(),
 });
@@ -180,4 +212,9 @@ module.exports = {
   ChannelSchema,
   ChannelUpdateSchema,
   ChannelMergeSchema,
+  PointsExpiryRuleSchema,
+  PointsExpiryRuleUpdateSchema,
+  PointsExtendSchema,
+  PointsExemptSchema,
+  PointsLedgerQuerySchema,
 };
