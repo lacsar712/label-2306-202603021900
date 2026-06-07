@@ -57,6 +57,11 @@ const router = createRouter({
           name: 'Channels',
           component: () => import('../views/ChannelAnalysis.vue'),
         },
+        {
+          path: 'checkin',
+          name: 'Checkin',
+          component: () => import('../views/CheckinManagement.vue'),
+        },
       ],
     },
   ],

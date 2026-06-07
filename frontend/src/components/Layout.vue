@@ -34,6 +34,10 @@
           <el-icon><Histogram /></el-icon>
           <span>渠道分析</span>
         </el-menu-item>
+        <el-menu-item index="/checkin">
+          <el-icon><Calendar /></el-icon>
+          <span>签到管理</span>
+        </el-menu-item>
       </el-menu>
       <div class="sidebar-footer">
         <el-button link @click="handleLogout" class="logout-btn">
@@ -75,7 +79,7 @@
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
-import { DataAnalysis, User, Setting, SwitchButton, UserFilled, Tickets, Present, Histogram } from '@element-plus/icons-vue';
+import { DataAnalysis, User, Setting, SwitchButton, UserFilled, Tickets, Present, Histogram, Calendar } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 
 const route = useRoute();
@@ -96,6 +100,7 @@ const currentPageName = computed(() => {
   if (route.path === '/system') return '系统管理';
   if (route.path === '/campaigns') return '营销活动';
   if (route.path === '/channels') return '渠道分析';
+  if (route.path === '/checkin') return '签到管理';
   return '';
 });
 

@@ -130,6 +130,27 @@ const SigninSchema = z.object({
   memberId: z.number().int().positive(),
 });
 
+const MakeupSigninSchema = z.object({
+  memberId: z.number().int().positive(),
+  signinDate: z.string(),
+});
+
+const SigninConfigSchema = z.object({
+  basePoints: z.number().int().min(1),
+  consecutiveBonusRules: z.array(z.object({
+    days: z.number().int().min(1),
+    bonusPoints: z.number().int().min(0),
+  })),
+  monthlyMakeupLimit: z.number().int().min(0),
+  makeupCostPoints: z.number().int().min(0),
+});
+
+const SigninStatsQuerySchema = z.object({
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  memberId: z.string().optional(),
+});
+
 const ExchangeSchema = z.object({
   memberId: z.number().int().positive(),
   itemName: z.string().min(1),
@@ -152,6 +173,9 @@ module.exports = {
   CampaignUpdateSchema,
   CampaignStatusTransitionSchema,
   SigninSchema,
+  MakeupSigninSchema,
+  SigninConfigSchema,
+  SigninStatsQuerySchema,
   ExchangeSchema,
   ChannelSchema,
   ChannelUpdateSchema,
