@@ -194,7 +194,7 @@ import { COMPONENT_MAP, COMPONENT_META, STAT_TYPES } from '../components/dashboa
 import {
   ArrowLeft, RefreshLeft, Close, Check, Plus, Delete,
   Grid, List, Setting, Promotion,
-  DataLine, TrendCharts, PieChart, Bell, Histogram, Tickets, Clock,
+  DataLine, TrendCharts, PieChart, Trophy, Warning, Bell, Histogram, Tickets, Clock,
 } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 

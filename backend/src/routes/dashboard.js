@@ -18,12 +18,14 @@ const getDefaultComponents = () => [
   { type: 'STAT_CARD', title: '总积分', x: 6, y: 0, width: 3, height: 3, visible: true, refreshInterval: 60, order: 2, config: { statType: 'TOTAL_POINTS' } },
   { type: 'STAT_CARD', title: '今日签到', x: 9, y: 0, width: 3, height: 3, visible: true, refreshInterval: 60, order: 3, config: { statType: 'TODAY_SIGNINS' } },
   { type: 'CAMPAIGN_BANNER', title: '活动 Banner', x: 0, y: 3, width: 12, height: 2, visible: true, refreshInterval: 300, order: 4 },
-  { type: 'LEVEL_DISTRIBUTION', title: '等级分布', x: 0, y: 5, width: 6, height: 6, visible: true, refreshInterval: 300, order: 5 },
-  { type: 'CHANNEL_PIE', title: '渠道分布', x: 6, y: 5, width: 6, height: 6, visible: true, refreshInterval: 300, order: 6 },
-  { type: 'BIRTHDAY_REMINDER', title: '生日提醒', x: 0, y: 11, width: 4, height: 6, visible: true, refreshInterval: 3600, order: 7 },
-  { type: 'CHECKIN_TREND', title: '签到趋势', x: 4, y: 11, width: 4, height: 6, visible: true, refreshInterval: 300, order: 8 },
-  { type: 'TICKET_SLA', title: '工单 SLA 概览', x: 8, y: 11, width: 4, height: 6, visible: true, refreshInterval: 120, order: 9 },
-  { type: 'POINTS_EXPIRY', title: '积分过期预警', x: 0, y: 17, width: 12, height: 5, visible: true, refreshInterval: 3600, order: 10 },
+  { type: 'CHANNEL_ALERTS', title: '渠道异常预警', x: 0, y: 5, width: 12, height: 3, visible: true, refreshInterval: 1800, order: 5 },
+  { type: 'LEVEL_DISTRIBUTION', title: '等级分布', x: 0, y: 8, width: 6, height: 6, visible: true, refreshInterval: 300, order: 6 },
+  { type: 'CHANNEL_PIE', title: '渠道分布', x: 6, y: 8, width: 3, height: 6, visible: true, refreshInterval: 300, order: 7 },
+  { type: 'CHANNEL_TOP_LIST', title: 'TOP5 获客渠道', x: 9, y: 8, width: 3, height: 6, visible: true, refreshInterval: 300, order: 8 },
+  { type: 'BIRTHDAY_REMINDER', title: '生日提醒', x: 0, y: 14, width: 4, height: 6, visible: true, refreshInterval: 3600, order: 9 },
+  { type: 'CHECKIN_TREND', title: '签到趋势', x: 4, y: 14, width: 4, height: 6, visible: true, refreshInterval: 300, order: 10 },
+  { type: 'TICKET_SLA', title: '工单 SLA 概览', x: 8, y: 14, width: 4, height: 6, visible: true, refreshInterval: 120, order: 11 },
+  { type: 'POINTS_EXPIRY', title: '积分过期预警', x: 0, y: 20, width: 12, height: 5, visible: true, refreshInterval: 3600, order: 12 },
 ];
 
 const buildMemberWhere = async (user, channelId) => {
@@ -91,7 +93,7 @@ router.get('/config', authenticate, async (req, res) => {
 const DashboardUpdateSchema = z.object({
   components: z.array(z.object({
     id: z.number().optional(),
-    type: z.enum(['STAT_CARD', 'LEVEL_DISTRIBUTION', 'CHANNEL_PIE', 'BIRTHDAY_REMINDER', 'CAMPAIGN_BANNER', 'CHECKIN_TREND', 'TICKET_SLA', 'POINTS_EXPIRY']),
+    type: z.enum(['STAT_CARD', 'LEVEL_DISTRIBUTION', 'CHANNEL_PIE', 'CHANNEL_TOP_LIST', 'CHANNEL_ALERTS', 'BIRTHDAY_REMINDER', 'CAMPAIGN_BANNER', 'CHECKIN_TREND', 'TICKET_SLA', 'POINTS_EXPIRY']),
     title: z.string(),
     x: z.number(),
     y: z.number(),
@@ -444,6 +446,104 @@ router.get('/data/points-expiry', authenticate, async (req, res) => {
     });
   } catch (error) {
     logger.error('Error fetching points expiry', { error: error.message });
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+router.get('/data/channel-top-list', authenticate, async (req, res) => {
+  try {
+    const { limit = 5, channelId } = req.query;
+    let accessibleIds = await getAccessibleChannelIds(req.user);
+    if (channelId) accessibleIds = accessibleIds.filter(id => id === parseInt(channelId));
+
+    const channels = await prisma.channel.findMany({
+      where: { id: { in: accessibleIds }, isActive: true },
+      include: {
+        _count: { select: { members: true } },
+      },
+      take: parseInt(limit),
+      orderBy: { members: { _count: 'desc' } },
+    });
+
+    const total = await prisma.member.count({
+      where: { sourceChannelId: { in: accessibleIds } },
+    });
+
+    const data = channels.map(c => ({
+      id: c.id,
+      name: c.name,
+      memberCount: c._count.members,
+      percent: total > 0 ? Math.round((c._count.members / total) * 100) : 0,
+    }));
+
+    res.json(data);
+  } catch (error) {
+    logger.error('Error fetching channel top list', { error: error.message });
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+router.get('/data/channel-alerts', authenticate, async (req, res) => {
+  try {
+    const accessibleIds = await getAccessibleChannelIds(req.user);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const sevenDaysAgo = new Date(today); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const fourteenDaysAgo = new Date(today); fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+    const activeChannels = await prisma.channel.findMany({
+      where: { id: { in: accessibleIds }, isActive: true },
+      select: { id: true, name: true },
+    });
+
+    const alerts = [];
+
+    for (const ch of activeChannels) {
+      const [current7d, previous7d] = await Promise.all([
+        prisma.member.count({
+          where: {
+            sourceChannelId: ch.id,
+            joinDate: { gte: sevenDaysAgo, lt: today },
+          },
+        }),
+        prisma.member.count({
+          where: {
+            sourceChannelId: ch.id,
+            joinDate: { gte: fourteenDaysAgo, lt: sevenDaysAgo },
+          },
+        }),
+      ]);
+
+      const base = Math.max(previous7d, 3);
+      const changePercent = previous7d > 0 ? Math.round(((current7d - previous7d) / previous7d) * 100) : 0;
+
+      if (current7d > 0 && previous7d === 0) continue;
+      if (changePercent <= -50 && current7d < previous7d) {
+        alerts.push({
+          channelId: ch.id,
+          channelName: ch.name,
+          type: 'DROP',
+          current7d,
+          previous7d,
+          changePercent,
+          message: `近7日新增 ${current7d}，较上一周期 ${previous7d} 下降 ${Math.abs(changePercent)}%`,
+        });
+      } else if (changePercent >= 100 && current7d > previous7d && previous7d >= 3) {
+        alerts.push({
+          channelId: ch.id,
+          channelName: ch.name,
+          type: 'SPIKE',
+          current7d,
+          previous7d,
+          changePercent,
+          message: `近7日新增 ${current7d}，较上一周期 ${previous7d} 激增 ${changePercent}%`,
+        });
+      }
+    }
+
+    alerts.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
+    res.json(alerts);
+  } catch (error) {
+    logger.error('Error fetching channel alerts', { error: error.message });
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });

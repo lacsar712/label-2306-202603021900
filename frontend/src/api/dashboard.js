@@ -9,6 +9,8 @@ export const saveDefaultTemplate = (data) => api.put('/dashboard/default-templat
 export const fetchStatCard = (params) => api.get('/dashboard/data/stat-card', { params });
 export const fetchLevelDistribution = (params) => api.get('/dashboard/data/level-distribution', { params });
 export const fetchChannelPie = (params) => api.get('/dashboard/data/channel-pie', { params });
+export const fetchChannelTopList = (params) => api.get('/dashboard/data/channel-top-list', { params });
+export const fetchChannelAlerts = (params) => api.get('/dashboard/data/channel-alerts', { params });
 export const fetchBirthdayReminder = (params) => api.get('/dashboard/data/birthday-reminder', { params });
 export const fetchCampaignBanner = (params) => api.get('/dashboard/data/campaign-banner', { params });
 export const fetchCheckinTrend = (params) => api.get('/dashboard/data/checkin-trend', { params });
