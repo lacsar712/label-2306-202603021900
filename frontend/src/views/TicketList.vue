@@ -6,6 +6,9 @@
         <p class="page-subtitle">处理会员反馈工单，查看 SLA 和统计数据</p>
       </div>
       <div class="header-actions">
+        <el-button @click="openRulesDialog">
+          <el-icon class="mr-4"><Setting /></el-icon>分配规则
+        </el-button>
         <el-button type="primary" @click="showCreateDialog = true">
           <el-icon class="mr-4"><Plus /></el-icon>新建工单
         </el-button>
@@ -58,6 +61,69 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-card v-if="pendingAssignCount > 0" class="warn-card mb-24" shadow="never">
+      <el-alert
+        :title="`当前有 ${pendingAssignCount} 个工单处于「待分配」状态，建议尽快配置分配规则或手动转派。`"
+        type="warning"
+        show-icon
+        :closable="false"
+      >
+        <template #default>
+          <el-button size="small" type="warning" @click="openRulesDialog">配置分配规则</el-button>
+        </template>
+      </el-alert>
+    </el-card>
+
+    <el-card class="assignee-stats-card mb-24" shadow="never">
+      <div class="section-header">
+        <div class="section-title">
+          <el-icon><DataAnalysis /></el-icon>
+          <span>处理人绩效（近 30 天）</span>
+        </div>
+      </div>
+      <el-table
+        :data="assigneeStats"
+        style="width: 100%"
+        :header-cell-style="{ background: '#f8fafc', color: '#64748b', fontWeight: '600' }"
+        empty-text="暂无处理数据"
+      >
+        <el-table-column prop="username" label="处理人" width="150">
+          <template #default="{ row }">
+            <div class="assignee-cell">
+              <el-avatar :size="28">{{ row.username?.charAt(0)?.toUpperCase() }}</el-avatar>
+              <span>{{ row.username }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="totalTickets" label="受理工单" width="100" align="center" />
+        <el-table-column prop="closedCount" label="已关闭" width="100" align="center" />
+        <el-table-column label="关闭率" width="140" align="center">
+          <template #default="{ row }">
+            <el-progress
+              :percentage="row.closeRate || 0"
+              :color="getCloseRateColor(row.closeRate)"
+              :stroke-width="10"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="平均响应时长" width="160" align="center">
+          <template #default="{ row }">
+            <span v-if="row.avgResponseTimeMs">{{ formatDuration(row.avgResponseTimeMs) }}</span>
+            <span v-else class="sub-text">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="满意度" width="180" align="center">
+          <template #default="{ row }">
+            <div v-if="row.avgSatisfaction" class="satisfaction-display">
+              <el-rate v-model="row.avgSatisfaction" disabled :max="5" size="small" />
+              <span class="satisfaction-num">{{ row.avgSatisfaction.toFixed(1) }} / 5</span>
+            </div>
+            <span v-else class="sub-text">暂无评价</span>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
 
     <el-card class="filter-card mb-24" shadow="never">
       <div class="filter-row">
@@ -247,6 +313,59 @@
         <el-button type="primary" :loading="submitting" @click="submitCreateForm">提交</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="showRulesDialog" title="工单分配规则配置" width="680px" destroy-on-close>
+      <div class="rules-desc">
+        为每个工单分类指定默认处理人，新创建的工单将自动分配给对应分类的处理人，并根据 SLA 时长计算截止时间。
+      </div>
+      <el-table
+        :data="assignmentRulesTable"
+        style="width: 100%"
+        :header-cell-style="{ background: '#f8fafc', color: '#64748b', fontWeight: '600' }"
+      >
+        <el-table-column label="工单分类" width="140">
+          <template #default="{ row }">
+            <el-tag :type="TICKET_CATEGORY[row.category]?.type" effect="dark">
+              {{ TICKET_CATEGORY[row.category]?.label }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="默认处理人" min-width="200">
+          <template #default="{ row }">
+            <el-select
+              v-model="row.defaultAssigneeId"
+              placeholder="请选择处理人"
+              filterable
+              style="width: 100%"
+              clearable
+            >
+              <el-option
+                v-for="u in users"
+                :key="u.id"
+                :label="u.username"
+                :value="u.id"
+              />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="SLA 时长（小时）" width="180">
+          <template #default="{ row }">
+            <el-input-number
+              v-model="row.slaHours"
+              :min="1"
+              :max="240"
+              :step="1"
+              controls-position="right"
+              style="width: 100%"
+            />
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="showRulesDialog = false">取消</el-button>
+        <el-button type="primary" :loading="savingRules" @click="saveAssignmentRules">保存配置</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -261,6 +380,7 @@ import dayjs from 'dayjs';
 import { ElMessage } from 'element-plus';
 import {
   Plus, Search, Document, Clock, Loading, Warning, WarningFilled,
+  Setting, DataAnalysis,
 } from '@element-plus/icons-vue';
 
 const route = useRoute();
@@ -272,6 +392,10 @@ const showCreateDialog = ref(false);
 const submitting = ref(false);
 const createFormRef = ref(null);
 const users = ref([]);
+
+const showRulesDialog = ref(false);
+const savingRules = ref(false);
+const assignmentRulesTable = ref([]);
 
 const filters = reactive({
   search: '',
@@ -315,6 +439,13 @@ const processingCount = computed(() => {
   const review = byStatus.find((s) => s.status === 'PENDING_REVIEW')?._count?._all || 0;
   return processing + review;
 });
+
+const pendingAssignCount = computed(() => {
+  const byStatus = stats.value?.byStatus || [];
+  return byStatus.find((s) => s.status === 'PENDING_ASSIGN')?._count?._all || 0;
+});
+
+const assigneeStats = computed(() => stats.value?.assigneeStats || []);
 
 const handleSearch = () => {
   currentPage.value = 1;
@@ -398,10 +529,73 @@ const formatSlaRemaining = (ms) => {
   return `${sign}${mins}分钟`;
 };
 
+const formatDuration = (ms) => {
+  if (!ms) return '—';
+  const abs = Math.abs(ms);
+  const hours = Math.floor(abs / (60 * 60 * 1000));
+  const mins = Math.floor((abs % (60 * 60 * 1000)) / (60 * 1000));
+  if (hours > 0) return `${hours}小时${mins}分`;
+  return `${mins}分钟`;
+};
+
+const getCloseRateColor = (rate) => {
+  if (rate >= 80) return '#16a34a';
+  if (rate >= 50) return '#3b82f6';
+  if (rate >= 30) return '#f59e0b';
+  return '#ef4444';
+};
+
+const initAssignmentRulesTable = async () => {
+  try {
+    const rules = await ticketStore.fetchAssignmentRules();
+    const ruleMap = {};
+    (rules || []).forEach((r) => {
+      ruleMap[r.category] = r;
+    });
+    assignmentRulesTable.value = Object.keys(TICKET_CATEGORY).map((key) => ({
+      category: key,
+      defaultAssigneeId: ruleMap[key]?.defaultAssigneeId || null,
+      slaHours: ruleMap[key]?.slaHours || 24,
+    }));
+  } catch (e) {
+    assignmentRulesTable.value = Object.keys(TICKET_CATEGORY).map((key) => ({
+      category: key,
+      defaultAssigneeId: null,
+      slaHours: 24,
+    }));
+  }
+};
+
+const saveAssignmentRules = async () => {
+  savingRules.value = true;
+  try {
+    const validRules = assignmentRulesTable.value.filter((r) => r.defaultAssigneeId);
+    if (validRules.length === 0) {
+      ElMessage.warning('请至少为一个分类指定默认处理人');
+      return;
+    }
+    for (const rule of assignmentRulesTable.value) {
+      if (rule.defaultAssigneeId) {
+        await ticketStore.saveAssignmentRule({
+          category: rule.category,
+          defaultAssigneeId: rule.defaultAssigneeId,
+          slaHours: rule.slaHours,
+        });
+      }
+    }
+    ElMessage.success('分配规则保存成功');
+    showRulesDialog.value = false;
+    ticketStore.fetchStats();
+  } finally {
+    savingRules.value = false;
+  }
+};
+
 onMounted(async () => {
   await Promise.all([
     memberStore.fetchMembers(),
     fetchUsers(),
+    initAssignmentRulesTable(),
   ]);
   if (route.query.memberId) {
     filters.memberId = String(route.query.memberId);
@@ -409,6 +603,11 @@ onMounted(async () => {
   fetchTickets();
   ticketStore.fetchStats();
 });
+
+const openRulesDialog = async () => {
+  showRulesDialog.value = true;
+  await initAssignmentRulesTable();
+};
 </script>
 
 <style scoped>
@@ -545,5 +744,52 @@ onMounted(async () => {
   border-radius: 6px;
   font-weight: 500;
   border: none;
+}
+
+.warn-card, .assignee-stats-card {
+  border-radius: 12px;
+  border: none;
+}
+
+.section-header {
+  margin-bottom: 16px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.assignee-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.satisfaction-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.satisfaction-num {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.rules-desc {
+  background: #f0f9ff;
+  color: #0369a1;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  line-height: 1.6;
 }
 </style>
