@@ -41,9 +41,17 @@
         </el-card>
       </el-col>
       <el-col :span="6">
-        <el-card shadow="never" class="stat-card">
+        <el-card
+          shadow="never"
+          class="stat-card stat-card-clickable"
+          :class="{ 'stat-card-empty': !stats?.repeatOffenders }"
+          @click="stats?.repeatOffenders > 0 && (showRepeatDialog = true)"
+        >
           <div class="stat-content">
-            <div class="stat-label">重复列入会员</div>
+            <div class="stat-label">
+              重复列入会员
+              <el-icon v-if="stats?.repeatOffenders > 0" class="stat-arrow"><ArrowRight /></el-icon>
+            </div>
             <div class="stat-value text-info">{{ stats?.repeatOffenders || 0 }}</div>
           </div>
         </el-card>
@@ -500,6 +508,87 @@
       </el-table>
       <el-empty v-if="currentAuditLogs.length === 0" description="暂无拦截记录" />
     </el-dialog>
+
+    <el-dialog
+      v-model="showRepeatDialog"
+      title="重复列入会员明细"
+      width="900px"
+      destroy-on-close
+    >
+      <div v-if="stats?.repeatOffenderList?.length" class="repeat-tip">
+        共 <b>{{ stats.repeatOffenderList.length }}</b> 位会员被多次列入黑名单（按列入次数降序）
+      </div>
+      <el-table
+        v-if="stats?.repeatOffenderList?.length"
+        :data="stats.repeatOffenderList"
+        style="width: 100%"
+        :header-cell-style="{ background: '#f8fafc', color: '#64748b', fontWeight: '600' }"
+        row-key="key"
+      >
+        <el-table-column type="expand">
+          <template #default="{ row }">
+            <div class="expand-wrapper">
+              <div class="expand-title">列入记录明细（共 {{ row.records.length }} 次）</div>
+              <el-table
+                :data="row.records"
+                size="small"
+                :header-cell-style="{ background: '#f1f5f9', color: '#64748b' }"
+              >
+                <el-table-column prop="category" label="原因分类" min-width="110">
+                  <template #default="{ row: r }">
+                    <el-tag :type="getCategoryTagType(r.category)" size="small">{{ getCategoryLabel(r.category) }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="reason" label="列入原因" min-width="180" show-overflow-tooltip />
+                <el-table-column label="列入时间" min-width="150">
+                  <template #default="{ row: r }">
+                    {{ formatDate(r.addedAt) }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="解除时间" min-width="150">
+                  <template #default="{ row: r }">
+                    {{ r.releasedAt ? formatDate(r.releasedAt) : '-' }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="预计解除" min-width="150">
+                  <template #default="{ row: r }">
+                    {{ r.expectedReleaseAt ? formatDate(r.expectedReleaseAt) : '-' }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="status" label="状态" min-width="90">
+                  <template #default="{ row: r }">
+                    <el-tag :type="getStatusTagType(r.status)" size="small">{{ getStatusLabel(r.status) }}</el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="memberName" label="姓名" min-width="100">
+          <template #default="{ row }">
+            <span>{{ row.memberName || '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" label="手机号" min-width="130" />
+        <el-table-column label="列入次数" min-width="100" align="center">
+          <template #default="{ row }">
+            <el-tag type="danger" effect="dark" round>{{ row.count }} 次</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="最近列入" min-width="160">
+          <template #default="{ row }">
+            {{ row.lastAddedAt ? formatDate(row.lastAddedAt) : '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="当前状态" min-width="110" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.currentActive" type="danger" effect="plain">仍在黑名单</el-tag>
+            <el-tag v-else type="success" effect="plain">已解除</el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty v-else description="暂无重复列入会员" />
+    </el-dialog>
   </div>
 </template>
 
@@ -510,7 +599,7 @@ import { useAuthStore } from '../stores/auth';
 import { useMemberStore } from '../stores/member';
 import dayjs from 'dayjs';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Search, UploadFilled } from '@element-plus/icons-vue';
+import { Plus, Search, UploadFilled, ArrowRight } from '@element-plus/icons-vue';
 
 const blacklistStore = useBlacklistStore();
 const authStore = useAuthStore();
@@ -534,6 +623,7 @@ const showReleaseDialog = ref(false);
 const showRejectDialog = ref(false);
 const showEvidenceDialog = ref(false);
 const showAuditDialog = ref(false);
+const showRepeatDialog = ref(false);
 
 const addFormRef = ref(null);
 const batchFormRef = ref(null);
@@ -1041,6 +1131,38 @@ onMounted(async () => {
   color: #1e293b;
 }
 
+.stat-card-clickable {
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.stat-card-clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
+  border-color: #0ea5e9 !important;
+}
+
+.stat-card-empty {
+  cursor: default;
+}
+
+.stat-card-empty:hover {
+  transform: none;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+.stat-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-arrow {
+  opacity: 0.5;
+  font-size: 14px;
+}
+
 .text-danger { color: #ef4444; }
 .text-warning { color: #f97316; }
 .text-primary { color: #4f46e5; }
@@ -1179,5 +1301,27 @@ onMounted(async () => {
   font-weight: 600;
   color: #4f46e5;
   margin-left: auto;
+}
+
+.repeat-tip {
+  padding: 8px 16px;
+  background-color: #eff6ff;
+  color: #1e40af;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.expand-wrapper {
+  padding: 12px 24px;
+  background-color: #fafafa;
+  border-radius: 8px;
+}
+
+.expand-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 12px;
 }
 </style>

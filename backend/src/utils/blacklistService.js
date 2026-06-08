@@ -129,16 +129,20 @@ const getBlacklistStats = async () => {
       _count: true,
     }),
     prisma.blacklist.findMany({
-      where: { status: { in: ['ACTIVE', 'RELEASED'] } },
+      where: { status: { in: ['ACTIVE', 'RELEASED', 'PENDING_APPROVAL', 'REJECTED'] } },
       select: {
         id: true,
         memberId: true,
         phone: true,
+        memberName: true,
+        category: true,
+        reason: true,
         addedAt: true,
         releasedAt: true,
         status: true,
         expectedReleaseAt: true,
       },
+      orderBy: { addedAt: 'desc' },
     }),
   ]);
 
@@ -154,14 +158,39 @@ const getBlacklistStats = async () => {
     : 0;
   const avgDurationDays = (avgDurationMs / (1000 * 60 * 60 * 24)).toFixed(2);
 
-  const memberOccurrences = {};
+  const memberGroups = {};
   for (const r of allRecords) {
     const key = r.memberId || r.phone;
-    memberOccurrences[key] = (memberOccurrences[key] || 0) + 1;
+    if (!memberGroups[key]) {
+      memberGroups[key] = {
+        key,
+        memberId: r.memberId,
+        phone: r.phone,
+        memberName: r.memberName,
+        count: 0,
+        records: [],
+      };
+    }
+    memberGroups[key].count++;
+    memberGroups[key].records.push({
+      id: r.id,
+      category: r.category,
+      reason: r.reason,
+      addedAt: r.addedAt,
+      releasedAt: r.releasedAt,
+      status: r.status,
+      expectedReleaseAt: r.expectedReleaseAt,
+    });
   }
-  const repeatOffenders = Object.entries(memberOccurrences)
-    .filter(([, count]) => count > 1)
-    .length;
+
+  const repeatOffenderList = Object.values(memberGroups)
+    .filter((m) => m.count > 1)
+    .sort((a, b) => b.count - a.count)
+    .map((m) => ({
+      ...m,
+      lastAddedAt: m.records.length > 0 ? m.records[0].addedAt : null,
+      currentActive: m.records.some((r) => r.status === 'ACTIVE' || r.status === 'PENDING_APPROVAL'),
+    }));
 
   const pendingApproval = await prisma.blacklist.count({ where: { status: 'PENDING_APPROVAL' } });
 
@@ -172,7 +201,8 @@ const getBlacklistStats = async () => {
     released: allRecords.filter((r) => r.status === 'RELEASED').length,
     categoryStats,
     avgDurationDays: parseFloat(avgDurationDays),
-    repeatOffenders,
+    repeatOffenders: repeatOffenderList.length,
+    repeatOffenderList,
   };
 };
 
