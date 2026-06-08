@@ -117,7 +117,7 @@
                       @click="insertVariable(v.name)"
                       style="cursor: pointer"
                     >
-                      {{{ v.name }}}
+                      {{ '{' + v.name + '}' }}
                       <span class="chip-label">{{ v.label }}</span>
                     </el-tag>
                     <span v-if="allVariables.length === 0" class="muted">暂无变量</span>
@@ -127,16 +127,16 @@
                   <span class="section-label">条件片段</span>
                   <div class="condition-buttons">
                     <el-button size="small" @click="insertCondition('if')">
-                      插入 {{if}} 条件
+                      插入 <span v-pre>{{if}}</span> 条件
                     </el-button>
                     <el-button size="small" @click="insertCondition('switch')">
-                      插入 {{switch}} 分支
+                      插入 <span v-pre>{{switch}}</span> 分支
                     </el-button>
                   </div>
                 </div>
                 <el-collapse class="syntax-help">
                   <el-collapse-item title="语法帮助" name="syntax">
-                    <div class="syntax-content">
+                    <div class="syntax-content" v-pre>
                       <h5>变量替换</h5>
                       <p>使用 <code>{变量名}</code> 格式插入变量，例如：</p>
                       <pre>尊敬的{userName}，您当前有{points}积分。</pre>

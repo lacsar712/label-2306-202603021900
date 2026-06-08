@@ -17,7 +17,7 @@
             :key="idx"
             cx="100" cy="100" r="70"
             :fill="seg.color"
-            :stroke="#fff"
+            stroke="#fff"
             stroke-width="2"
             :stroke-dasharray="seg.dash + ' 9999'"
             :stroke-dashoffset="-seg.offset"

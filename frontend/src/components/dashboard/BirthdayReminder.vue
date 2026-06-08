@@ -19,7 +19,7 @@
           </div>
         </div>
         <div class="date">
-          <el-icon color="#f43f5e"><Cake /></el-icon>
+          <el-icon color="#f43f5e"><Present /></el-icon>
           <span>{{ formatDate(item.birthday) }}</span>
         </div>
       </div>
@@ -31,7 +31,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { fetchBirthdayReminder } from '../../api/dashboard';
-import { Bell, Cake } from '@element-plus/icons-vue';
+import { Bell, Present } from '@element-plus/icons-vue';
 import dayjs from 'dayjs';
 
 const props = defineProps({
