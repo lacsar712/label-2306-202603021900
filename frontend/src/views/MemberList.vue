@@ -91,6 +91,28 @@
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
+        <el-table-column label="推荐人" min-width="160">
+          <template #default="{ row }">
+            <div v-if="row.referrer">
+              <div class="font-medium">{{ row.referrer.name }}</div>
+              <div class="text-muted text-sm">{{ row.referrer.phone }}</div>
+            </div>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="推荐码" min-width="120">
+          <template #default="{ row }">
+            <el-tag v-if="row.referralCode" type="warning" effect="plain" size="small" class="font-mono">
+              {{ row.referralCode }}
+            </el-tag>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="直推人数" min-width="100" align="center">
+          <template #default="{ row }">
+            <span class="font-medium text-primary">{{ row.directReferrals || 0 }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" min-width="100">
           <template #default="{ row }">
             <el-badge :is-dot="true" :type="getStatusType(row.status)">
@@ -197,6 +219,88 @@
             </el-form-item>
           </el-col>
         </el-row>
+
+        <el-divider content-position="left">推荐关系</el-divider>
+
+        <el-form-item v-if="form.referrerName" label="当前推荐人">
+          <div class="current-referrer">
+            <el-tag type="primary" effect="plain">
+              {{ form.referrerName }} - {{ form.referrerPhone }}
+            </el-tag>
+            <el-button
+              v-if="isEdit"
+              link
+              type="danger"
+              size="small"
+              @click="handleUnbindCurrentReferrer"
+            >
+              解除绑定
+            </el-button>
+          </div>
+        </el-form-item>
+
+        <el-form-item v-if="!form.referrerName" label="绑定方式">
+          <el-radio-group v-model="bindMode">
+            <el-radio label="phone">通过手机号</el-radio>
+            <el-radio label="code">通过推荐码</el-radio>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item v-if="!form.referrerName && bindMode === 'phone'" label="搜索推荐人">
+          <div class="referrer-search-group">
+            <el-input
+              v-model="referrerSearchKeyword"
+              placeholder="输入推荐人手机号搜索"
+              :loading="referrerSearchLoading"
+              class="flex-1"
+              @keyup.enter="handleReferrerSearch"
+            >
+              <template #append>
+                <el-button @click="handleReferrerSearch">搜索</el-button>
+              </template>
+            </el-input>
+          </div>
+          <div v-if="referrerCandidates.length > 0" class="referrer-candidate-list">
+            <div
+              v-for="m in referrerCandidates"
+              :key="m.id"
+              class="referrer-candidate-item"
+              @click="selectReferrer(m)"
+            >
+              <div class="candidate-name">{{ m.name }}</div>
+              <div class="candidate-phone">{{ m.phone }}</div>
+              <el-tag v-if="m.referralCode" size="small" type="warning" effect="plain">
+                {{ m.referralCode }}
+              </el-tag>
+            </div>
+          </div>
+          <div v-if="form.referrerId && form.referrerName" class="selected-referrer">
+            <el-icon color="#10b981"><CircleCheck /></el-icon>
+            <span>已选择: {{ form.referrerName }} - {{ form.referrerPhone }}</span>
+            <el-button link type="danger" size="small" @click="clearReferrer">清除</el-button>
+          </div>
+        </el-form-item>
+
+        <el-form-item v-if="!form.referrerName && bindMode === 'code'" label="推荐码">
+          <div class="referrer-search-group">
+            <el-input
+              v-model="form.bindReferralCode"
+              placeholder="输入推荐码"
+              class="flex-1"
+            />
+            <el-button
+              v-if="isEdit"
+              type="primary"
+              @click="handleBindByCode"
+            >
+              绑定
+            </el-button>
+            <span v-else class="text-muted ml-8">
+              <el-icon><InfoFilled /></el-icon>
+              保存后可绑定
+            </span>
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showAddDialog = false">取消</el-button>
@@ -209,11 +313,14 @@
 <script setup>
 import { ref, onMounted, reactive, watch } from 'vue';
 import { useMemberStore } from '../stores/member';
+import { useReferralStore } from '../stores/referral';
 import { useChannelStore } from '../stores/channel';
 import dayjs from 'dayjs';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { CircleCheck, InfoFilled } from '@element-plus/icons-vue';
 
 const memberStore = useMemberStore();
+const referralStore = useReferralStore();
 const channelStore = useChannelStore();
 const search = ref('');
 const filterLevel = ref('');
@@ -223,6 +330,10 @@ const isEdit = ref(false);
 const submitting = ref(false);
 const formRef = ref(null);
 const channelOptions = ref([]);
+const referrerSearchLoading = ref(false);
+const referrerSearchKeyword = ref('');
+const referrerCandidates = ref([]);
+const bindMode = ref('phone');
 
 const form = reactive({
   id: null,
@@ -236,7 +347,11 @@ const form = reactive({
   firstTouchAt: '',
   utmSource: '',
   utmMedium: '',
-  utmCampaign: ''
+  utmCampaign: '',
+  referrerId: null,
+  referrerName: '',
+  referrerPhone: '',
+  bindReferralCode: '',
 });
 
 const rules = {
@@ -263,6 +378,10 @@ const loadChannels = async () => {
 const handleEdit = (row) => {
   isEdit.value = true;
   Object.assign(form, row);
+  if (row.referrer) {
+    form.referrerName = row.referrer.name;
+    form.referrerPhone = row.referrer.phone;
+  }
   showAddDialog.value = true;
 };
 
@@ -285,6 +404,79 @@ const resetForm = () => {
   form.utmSource = '';
   form.utmMedium = '';
   form.utmCampaign = '';
+  form.referrerId = null;
+  form.referrerName = '';
+  form.referrerPhone = '';
+  form.bindReferralCode = '';
+  referrerSearchKeyword.value = '';
+  referrerCandidates.value = [];
+  bindMode.value = 'phone';
+};
+
+const handleReferrerSearch = async () => {
+  const keyword = referrerSearchKeyword.value.trim();
+  if (!keyword) return;
+  referrerSearchLoading.value = true;
+  try {
+    const params = bindMode.value === 'phone' ? { phone: keyword } : { code: keyword.toUpperCase() };
+    referrerCandidates.value = await referralStore.searchReferrer(params);
+  } finally {
+    referrerSearchLoading.value = false;
+  }
+};
+
+const selectReferrer = (member) => {
+  form.referrerId = member.id;
+  form.referrerName = member.name;
+  form.referrerPhone = member.phone;
+  referrerCandidates.value = [];
+  referrerSearchKeyword.value = '';
+};
+
+const clearReferrer = () => {
+  form.referrerId = null;
+  form.referrerName = '';
+  form.referrerPhone = '';
+  form.bindReferralCode = '';
+};
+
+const handleBindByCode = async () => {
+  if (!form.bindReferralCode.trim()) {
+    ElMessage.warning('请输入推荐码');
+    return;
+  }
+  if (!form.id && !isEdit.value) {
+    ElMessage.warning('请先保存会员信息后再绑定推荐人');
+    return;
+  }
+  try {
+    await referralStore.bindByCode({
+      refereeId: form.id,
+      referralCode: form.bindReferralCode.trim().toUpperCase(),
+      bindChannel: 'MEMBER_FORM',
+      bindSource: 'CODE',
+    });
+    ElMessage.success('绑定成功');
+    await memberStore.fetchMembers();
+    clearReferrer();
+    showAddDialog.value = false;
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.error || '绑定失败');
+  }
+};
+
+const handleUnbindCurrentReferrer = async () => {
+  try {
+    await ElMessageBox.confirm('确定要解除该会员的推荐人绑定吗？', '确认解除', {
+      type: 'warning',
+    });
+    await referralStore.unbindReferral(form.id);
+    ElMessage.success('已解除推荐关系');
+    clearReferrer();
+    await memberStore.fetchMembers();
+    showAddDialog.value = false;
+  } catch {
+  }
 };
 
 const submitForm = async () => {
@@ -295,6 +487,18 @@ const submitForm = async () => {
       try {
         if (isEdit.value) {
           await memberStore.updateMember(form.id, form);
+          if (form.referrerId && !form.referrer) {
+            try {
+              await referralStore.bindByPhone({
+                refereeId: form.id,
+                referrerPhone: form.referrerPhone,
+                bindChannel: 'MEMBER_FORM',
+                bindSource: 'PHONE',
+              });
+            } catch (bindError) {
+              console.warn('推荐人绑定失败', bindError);
+            }
+          }
           ElMessage.success('更新成功');
         } else {
           await memberStore.addMember(form);
@@ -447,5 +651,82 @@ watch(showAddDialog, (val) => {
 
 .text-muted {
   color: #94a3b8;
+}
+
+.current-referrer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.referrer-search-group {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+  align-items: center;
+}
+
+.referrer-search-group .flex-1 {
+  flex: 1;
+}
+
+.referrer-candidate-list {
+  margin-top: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.referrer-candidate-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background-color 0.2s;
+}
+
+.referrer-candidate-item:hover {
+  background-color: #f8fafc;
+}
+
+.candidate-name {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.candidate-phone {
+  font-size: 13px;
+  color: #64748b;
+  margin-right: 12px;
+}
+
+.selected-referrer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background-color: #ecfdf5;
+  border-radius: 8px;
+  color: #065f46;
+}
+
+.text-primary {
+  color: #4f46e5;
+}
+
+.font-mono {
+  font-family: monospace;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.ml-8 {
+  margin-left: 8px;
 }
 </style>

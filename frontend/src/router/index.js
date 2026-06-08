@@ -73,6 +73,11 @@ const router = createRouter({
           component: () => import('../views/PointsExpiry.vue'),
           meta: { requiresAdmin: true }
         },
+        {
+          path: 'referrals',
+          name: 'Referrals',
+          component: () => import('../views/ReferralList.vue'),
+        },
       ],
     },
   ],

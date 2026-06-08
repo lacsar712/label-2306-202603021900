@@ -7,6 +7,7 @@ const { MemberSchema, PointsUpdateSchema, SigninSchema, ExchangeSchema } = requi
 const { z } = require('zod');
 const { applyCampaigns, saveParticipations, ACTION_TYPES } = require('../utils/campaignService');
 const { createPointsLedger, consumePointsByFIFO } = require('../utils/pointsExpiryService');
+const referralService = require('../utils/referralService');
 
 const CLOSED_TICKET_STATUSES = ['CLOSED', 'REJECTED'];
 
@@ -32,9 +33,12 @@ router.get('/', authenticate, async (req, res) => {
       where,
       include: {
         sourceChannel: { select: { id: true, name: true, code: true } },
+        referrer: { select: { id: true, name: true, phone: true } },
+        referralCodes: { where: { type: 'PERSONAL' }, take: 1 },
         _count: {
           select: {
             tickets: true,
+            referrals: true,
           },
         },
         tickets: {
@@ -63,8 +67,12 @@ router.get('/', authenticate, async (req, res) => {
       utmSource: m.utmSource,
       utmMedium: m.utmMedium,
       utmCampaign: m.utmCampaign,
+      referrerId: m.referrerId,
+      referrer: m.referrer,
+      referralCode: m.referralCodes[0]?.code,
       totalTickets: m._count.tickets,
       openTickets: m.tickets.length,
+      directReferrals: m._count.referrals,
     }));
 
     res.json(enriched);
@@ -155,9 +163,62 @@ router.get('/:id/tickets', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   try {
     const validatedData = MemberSchema.parse(req.body);
-    const member = await prisma.member.create({
-      data: validatedData
+    const { referrerId, ...memberData } = validatedData;
+
+    const member = await prisma.$transaction(async (tx) => {
+      const newMember = await tx.member.create({ data: memberData });
+
+      await referralService.ensurePersonalReferralCode(newMember.id);
+
+      if (referrerId) {
+        const config = await referralService.getReferralConfig();
+
+        if (config.enableCircularCheck) {
+          const isCircular = await referralService.checkCircularReferral(referrerId, newMember.id);
+          if (isCircular) {
+            throw Object.assign(new Error('存在循环推荐关系，无法绑定推荐人'), { status: 400 });
+          }
+        }
+
+        const referrer = await tx.member.findUnique({ where: { id: referrerId } });
+        if (!referrer) {
+          throw Object.assign(new Error('推荐人不存在'), { status: 400 });
+        }
+
+        const level = await referralService.calculateReferralLevel(referrerId);
+        if (level > config.maxDepth) {
+          throw Object.assign(new Error(`推荐层级超过最大限制 ${config.maxDepth}`), { status: 400 });
+        }
+
+        await tx.member.update({
+          where: { id: newMember.id },
+          data: { referrerId },
+        });
+
+        await tx.referralBind.create({
+          data: {
+            referrerId,
+            refereeId: newMember.id,
+            level,
+            bindChannel: 'MEMBER_FORM',
+            bindSource: 'MEMBER_CREATE',
+            expiresAt: config.bindExpireHours > 0
+              ? new Date(Date.now() + config.bindExpireHours * 3600 * 1000)
+              : null,
+          },
+        });
+
+        await referralService.createReferralRewards(tx, referrerId, newMember.id, level);
+        await referralService.processRegisterReward(tx, newMember.id);
+
+        if (config.enableAnomalyDetection) {
+          await referralService.detectAnomalies(referrerId, newMember.id, level);
+        }
+      }
+
+      return newMember;
     });
+
     res.status(201).json(member);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -165,6 +226,9 @@ router.post('/', authenticate, async (req, res) => {
     }
     if (error.code === 'P2002') {
       return res.status(400).json({ error: 'Phone number already exists' });
+    }
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message });
     }
     logger.error('Error creating member', { error: error.message });
     res.status(500).json({ error: 'Internal Server Error' });

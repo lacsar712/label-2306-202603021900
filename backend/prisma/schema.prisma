@@ -44,6 +44,11 @@ model Member {
   utmSource       String?
   utmMedium       String?
   utmCampaign     String?
+  referrerId      Int?
+  referrer        Member?     @relation("ReferralTree", fields: [referrerId], references: [id])
+  referrals       Member[]    @relation("ReferralTree")
+  totalConsumption Float      @default(0)
+  firstOrderAt    DateTime?
 
   tickets   Ticket[]
   campaignParticipations CampaignParticipation[]
@@ -52,8 +57,12 @@ model Member {
   pointsLogs MemberPointsLog[]
   pointsLedgers PointsLedger[]
   reminderLogs PointsReminderLog[]
+  referralCodes ReferralCode[]
+  referralRewardsAsReferrer ReferralReward[] @relation("ReferrerRewards")
+  referralRewardsAsReferee ReferralReward[] @relation("RefereeRewards")
 
   @@index([sourceChannelId])
+  @@index([referrerId])
   @@map("members")
 }
 
@@ -449,4 +458,140 @@ model DashboardConfig {
   updatedAt        DateTime           @updatedAt
 
   @@map("dashboard_configs")
+}
+
+enum ReferralCodeType {
+  PERSONAL
+  CAMPAIGN
+}
+
+enum ReferralRewardStage {
+  REGISTER
+  FIRST_ORDER
+  CONSUMPTION_TARGET
+}
+
+enum ReferralRewardStatus {
+  PENDING
+  DISTRIBUTED
+  CANCELLED
+}
+
+enum ReferralAnomalyType {
+  SELF_REFERRAL
+  CROSS_LEVEL_TAMPER
+  CIRCULAR_REFERRAL
+  IP_ANOMALY
+  DEVICE_ANOMALY
+}
+
+model ReferralCode {
+  id              Int              @id @default(autoincrement())
+  code            String           @unique
+  type            ReferralCodeType @default(PERSONAL)
+  memberId        Int?
+  member          Member?          @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  campaignId      Int?
+  campaignName    String?
+  maxUses         Int              @default(0)
+  usedCount       Int              @default(0)
+  expiresAt       DateTime?
+  isActive        Boolean          @default(true)
+  bonusPoints     Int              @default(0)
+  refereeBonus    Int              @default(0)
+  createdBy       Int?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([memberId])
+  @@index([code])
+  @@map("referral_codes")
+}
+
+model ReferralReward {
+  id              Int                 @id @default(autoincrement())
+  referrerId      Int
+  referrer        Member              @relation("ReferrerRewards", fields: [referrerId], references: [id], onDelete: Cascade)
+  refereeId       Int
+  referee         Member              @relation("RefereeRewards", fields: [refereeId], references: [id], onDelete: Cascade)
+  stage           ReferralRewardStage
+  status          ReferralRewardStatus @default(PENDING)
+  points          Int                 @default(0)
+  targetValue     Float?
+  achievedValue   Float?
+  distributedAt   DateTime?
+  cancelledReason String?
+  ruleSnapshot    Json?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([referrerId, refereeId, stage])
+  @@index([referrerId, status])
+  @@index([refereeId])
+  @@map("referral_rewards")
+}
+
+model ReferralRewardRule {
+  id              Int                 @id @default(autoincrement())
+  name            String
+  stage           ReferralRewardStage @unique
+  points          Int                 @default(0)
+  targetValue     Float?
+  isEnabled       Boolean             @default(true)
+  levelMultipliers Json?
+  description     String?
+  createdBy       Int?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@map("referral_reward_rules")
+}
+
+model ReferralConfig {
+  id              Int      @id @default(autoincrement())
+  maxDepth        Int      @default(5)
+  enableCircularCheck Boolean @default(true)
+  enableAnomalyDetection Boolean @default(true)
+  bindExpireHours Int      @default(0)
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+
+  @@map("referral_configs")
+}
+
+model ReferralAnomaly {
+  id              Int                 @id @default(autoincrement())
+  referrerId      Int
+  refereeId       Int
+  type            ReferralAnomalyType
+  level           Int?
+  detail          Json?
+  isMarked        Boolean             @default(false)
+  markedBy        Int?
+  markedAt        DateTime?
+  createdAt       DateTime            @default(now())
+
+  @@index([referrerId])
+  @@index([refereeId])
+  @@index([type, isMarked])
+  @@map("referral_anomalies")
+}
+
+model ReferralBind {
+  id              Int      @id @default(autoincrement())
+  referrerId      Int
+  refereeId       Int   @unique
+  level           Int      @default(1)
+  bindChannel     String?
+  referralCodeId  Int?
+  bindSource      String?
+  expiresAt       DateTime?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([referrerId, refereeId])
+  @@index([referrerId])
+  @@index([refereeId])
+  @@map("referral_binds")
 }

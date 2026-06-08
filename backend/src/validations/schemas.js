@@ -12,6 +12,7 @@ const MemberSchema = z.object({
   utmSource: z.string().optional().nullable(),
   utmMedium: z.string().optional().nullable(),
   utmCampaign: z.string().optional().nullable(),
+  referrerId: z.number().int().positive().optional().nullable(),
 });
 
 const ChannelSchema = z.object({
@@ -189,6 +190,78 @@ const ExchangeSchema = z.object({
   points: z.number().int().positive(),
 });
 
+const ReferralBindSchema = z.object({
+  referrerId: z.number().int().positive(),
+  refereeId: z.number().int().positive(),
+  bindChannel: z.string().optional().nullable(),
+  referralCodeId: z.number().int().positive().optional().nullable(),
+  bindSource: z.string().optional().nullable(),
+});
+
+const ReferralBindByCodeSchema = z.object({
+  refereeId: z.number().int().positive(),
+  referralCode: z.string().min(4).max(32),
+  bindChannel: z.string().optional().nullable(),
+  bindSource: z.string().optional().nullable(),
+});
+
+const ReferralBindByPhoneSchema = z.object({
+  refereeId: z.number().int().positive(),
+  referrerPhone: z.string().regex(/^1[3-9]\d{9}$/),
+  bindChannel: z.string().optional().nullable(),
+  bindSource: z.string().optional().nullable(),
+});
+
+const ReferralCodeSchema = z.object({
+  code: z.string().min(4).max(32),
+  type: z.enum(['PERSONAL', 'CAMPAIGN']),
+  memberId: z.number().int().positive().optional().nullable(),
+  campaignId: z.number().int().positive().optional().nullable(),
+  campaignName: z.string().max(100).optional().nullable(),
+  maxUses: z.number().int().min(0).optional(),
+  expiresAt: z.string().datetime().optional().nullable(),
+  isActive: z.boolean().optional(),
+  bonusPoints: z.number().int().min(0).optional(),
+  refereeBonus: z.number().int().min(0).optional(),
+});
+
+const ReferralCodeUpdateSchema = ReferralCodeSchema.partial();
+
+const ReferralRewardRuleSchema = z.object({
+  name: z.string().min(1).max(100),
+  stage: z.enum(['REGISTER', 'FIRST_ORDER', 'CONSUMPTION_TARGET']),
+  points: z.number().int().min(0),
+  targetValue: z.number().positive().optional().nullable(),
+  isEnabled: z.boolean().optional(),
+  levelMultipliers: z.record(z.any()).optional().nullable(),
+  description: z.string().optional().nullable(),
+});
+
+const ReferralRewardRuleUpdateSchema = ReferralRewardRuleSchema.partial();
+
+const ReferralConfigSchema = z.object({
+  maxDepth: z.number().int().min(1).max(20),
+  enableCircularCheck: z.boolean().optional(),
+  enableAnomalyDetection: z.boolean().optional(),
+  bindExpireHours: z.number().int().min(0).optional(),
+});
+
+const ReferralAnomalyMarkSchema = z.object({
+  isMarked: z.boolean(),
+  markedBy: z.number().int().positive().optional().nullable(),
+});
+
+const ReferralSearchSchema = z.object({
+  phone: z.string().optional(),
+  code: z.string().optional(),
+});
+
+const ReferralLeaderboardSchema = z.object({
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  limit: z.string().optional(),
+});
+
 module.exports = {
   MemberSchema,
   PointsUpdateSchema,
@@ -217,4 +290,15 @@ module.exports = {
   PointsExtendSchema,
   PointsExemptSchema,
   PointsLedgerQuerySchema,
+  ReferralBindSchema,
+  ReferralBindByCodeSchema,
+  ReferralBindByPhoneSchema,
+  ReferralCodeSchema,
+  ReferralCodeUpdateSchema,
+  ReferralRewardRuleSchema,
+  ReferralRewardRuleUpdateSchema,
+  ReferralConfigSchema,
+  ReferralAnomalyMarkSchema,
+  ReferralSearchSchema,
+  ReferralLeaderboardSchema,
 };
