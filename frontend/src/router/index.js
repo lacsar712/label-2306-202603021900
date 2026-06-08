@@ -78,6 +78,11 @@ const router = createRouter({
           name: 'Referrals',
           component: () => import('../views/ReferralList.vue'),
         },
+        {
+          path: 'templates',
+          name: 'Templates',
+          component: () => import('../views/TemplateList.vue'),
+        },
       ],
     },
   ],

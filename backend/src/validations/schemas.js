@@ -262,6 +262,82 @@ const ReferralLeaderboardSchema = z.object({
   limit: z.string().optional(),
 });
 
+const NotificationChannelSchema = z.enum(['SMS', 'EMAIL', 'INAPP']);
+const NotificationTemplateStatusSchema = z.enum(['DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'DISABLED']);
+const NotificationTemplateCategorySchema = z.enum(['SYSTEM', 'BIRTHDAY', 'POINTS_EXPIRY', 'CAMPAIGN', 'TICKET', 'OTHER']);
+const NotificationSendStatusSchema = z.enum(['PENDING', 'SENDING', 'SUCCESS', 'FAILED', 'CANCELLED']);
+
+const NotificationVariableSchema = z.object({
+  name: z.string().min(1),
+  label: z.string().min(1),
+  type: z.enum(['string', 'number', 'date', 'boolean']).default('string'),
+  required: z.boolean().optional(),
+  defaultValue: z.any().optional(),
+  description: z.string().optional(),
+});
+
+const ChannelRuleSchema = z.object({
+  enabled: z.boolean().default(true),
+  titleTemplate: z.string().optional(),
+  contentTemplate: z.string().optional(),
+});
+
+const NotificationTemplateSchema = z.object({
+  name: z.string().min(1).max(200),
+  category: NotificationTemplateCategorySchema.optional(),
+  status: NotificationTemplateStatusSchema.optional(),
+  enabled: z.boolean().optional(),
+  channels: z.array(NotificationChannelSchema).optional(),
+  variables: z.array(NotificationVariableSchema).optional(),
+  titleTemplate: z.string().optional(),
+  contentTemplate: z.string().optional(),
+  channelRules: z.record(ChannelRuleSchema).optional(),
+  remark: z.string().optional().nullable(),
+});
+
+const NotificationTemplateUpdateSchema = NotificationTemplateSchema.partial();
+
+const NotificationTemplateStatusTransitionSchema = z.object({
+  status: NotificationTemplateStatusSchema,
+});
+
+const NotificationTemplateVersionCreateSchema = z.object({
+  titleTemplate: z.string().min(1),
+  contentTemplate: z.string().min(1),
+  channelRules: z.record(ChannelRuleSchema).optional(),
+  remark: z.string().optional().nullable(),
+});
+
+const NotificationTemplateRollbackSchema = z.object({
+  versionId: z.number().int().positive(),
+});
+
+const NotificationTemplatePreviewSchema = z.object({
+  titleTemplate: z.string(),
+  contentTemplate: z.string(),
+  channelRules: z.record(ChannelRuleSchema).optional(),
+  variables: z.record(z.any()).optional(),
+  channel: NotificationChannelSchema.optional(),
+});
+
+const NotificationSendSchema = z.object({
+  templateId: z.number().int().positive(),
+  templateVersionId: z.number().int().positive().optional(),
+  channel: NotificationChannelSchema,
+  memberIds: z.array(z.number().int().positive()).optional(),
+  memberLevel: z.array(z.enum(['NORMAL', 'SILVER', 'GOLD', 'PLATINUM'])).optional(),
+  variables: z.record(z.any()).optional(),
+  scheduledAt: z.string().datetime().optional().nullable(),
+});
+
+const NotificationSendRecordQuerySchema = z.object({
+  templateId: z.string().optional(),
+  status: NotificationSendStatusSchema.optional(),
+  channel: NotificationChannelSchema.optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+});
+
 module.exports = {
   MemberSchema,
   PointsUpdateSchema,
@@ -301,4 +377,18 @@ module.exports = {
   ReferralAnomalyMarkSchema,
   ReferralSearchSchema,
   ReferralLeaderboardSchema,
+  NotificationChannelSchema,
+  NotificationTemplateStatusSchema,
+  NotificationTemplateCategorySchema,
+  NotificationSendStatusSchema,
+  NotificationVariableSchema,
+  ChannelRuleSchema,
+  NotificationTemplateSchema,
+  NotificationTemplateUpdateSchema,
+  NotificationTemplateStatusTransitionSchema,
+  NotificationTemplateVersionCreateSchema,
+  NotificationTemplateRollbackSchema,
+  NotificationTemplatePreviewSchema,
+  NotificationSendSchema,
+  NotificationSendRecordQuerySchema,
 };

@@ -11,6 +11,7 @@ const checkinRoutes = require('./routes/checkins');
 const pointsExpiryRoutes = require('./routes/pointsExpiry');
 const dashboardRoutes = require('./routes/dashboard');
 const referralRoutes = require('./routes/referrals');
+const templateRoutes = require('./routes/templates');
 const logger = require('./utils/logger');
 
 const app = express();
@@ -30,6 +31,7 @@ app.use('/api/checkins', checkinRoutes);
 app.use('/api/points-expiry', pointsExpiryRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/referrals', referralRoutes);
+app.use('/api/templates', templateRoutes);
 // Compatibility for /api/stats which was at /api/stats in index.js
 app.use('/api', systemRoutes); 
 

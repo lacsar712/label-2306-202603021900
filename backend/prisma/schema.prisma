@@ -595,3 +595,100 @@ model ReferralBind {
   @@index([refereeId])
   @@map("referral_binds")
 }
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  INAPP
+}
+
+enum NotificationTemplateStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  DISABLED
+}
+
+enum NotificationTemplateCategory {
+  SYSTEM
+  BIRTHDAY
+  POINTS_EXPIRY
+  CAMPAIGN
+  TICKET
+  OTHER
+}
+
+enum NotificationSendStatus {
+  PENDING
+  SENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+model NotificationTemplate {
+  id               Int                          @id @default(autoincrement())
+  name             String
+  category         NotificationTemplateCategory @default(OTHER)
+  status           NotificationTemplateStatus   @default(DRAFT)
+  enabled          Boolean                      @default(true)
+  currentVersionId Int?
+  channels         Json                         @default("[]")
+  variables        Json                         @default("[]")
+  createdBy        Int?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+
+  versions         NotificationTemplateVersion[] @relation("TemplateVersions")
+  currentVersion   NotificationTemplateVersion?  @relation("CurrentTemplateVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  sendRecords      NotificationSendRecord[]
+
+  @@index([status])
+  @@index([category])
+  @@map("notification_templates")
+}
+
+model NotificationTemplateVersion {
+  id              Int                      @id @default(autoincrement())
+  templateId      Int
+  template        NotificationTemplate     @relation("TemplateVersions", fields: [templateId], references: [id], onDelete: Cascade)
+  versionNumber   Int
+  titleTemplate   String
+  contentTemplate String
+  channelRules    Json                     @default("{}")
+  createdBy       Int?
+  remark          String?
+  createdAt       DateTime                 @default(now())
+
+  currentOf       NotificationTemplate[]   @relation("CurrentTemplateVersion")
+  sendRecords     NotificationSendRecord[]
+
+  @@unique([templateId, versionNumber])
+  @@index([templateId])
+  @@map("notification_template_versions")
+}
+
+model NotificationSendRecord {
+  id               Int                      @id @default(autoincrement())
+  templateId       Int
+  template         NotificationTemplate     @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateVersionId Int
+  templateVersion  NotificationTemplateVersion @relation(fields: [templateVersionId], references: [id])
+  channel          NotificationChannel
+  memberIds        Json                     @default("[]")
+  variables        Json                     @default("{}")
+  status           NotificationSendStatus   @default(PENDING)
+  scheduledAt      DateTime?
+  sentAt           DateTime?
+  totalCount       Int                      @default(0)
+  successCount     Int                      @default(0)
+  failCount        Int                      @default(0)
+  createdBy        Int?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  @@index([templateId])
+  @@index([status])
+  @@index([channel])
+  @@map("notification_send_records")
+}

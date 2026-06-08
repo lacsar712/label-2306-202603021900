@@ -46,6 +46,10 @@
           <el-icon><Connection /></el-icon>
           <span>推荐关系</span>
         </el-menu-item>
+        <el-menu-item index="/templates">
+          <el-icon><ChatDotRound /></el-icon>
+          <span>通知模板</span>
+        </el-menu-item>
       </el-menu>
       <div class="sidebar-footer">
         <el-button link @click="handleLogout" class="logout-btn">
@@ -87,7 +91,7 @@
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
-import { DataAnalysis, User, Setting, SwitchButton, UserFilled, Tickets, Present, Histogram, Calendar, Clock, Connection } from '@element-plus/icons-vue';
+import { DataAnalysis, User, Setting, SwitchButton, UserFilled, Tickets, Present, Histogram, Calendar, Clock, Connection, ChatDotRound } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 
 const route = useRoute();
@@ -115,6 +119,7 @@ const currentPageName = computed(() => {
   if (route.path === '/checkin') return '签到管理';
   if (route.path === '/points-expiry') return '积分过期规则';
   if (route.path === '/referrals') return '推荐关系管理';
+  if (route.path === '/templates') return '通知模板管理';
   return '';
 });
 
