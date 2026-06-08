@@ -165,7 +165,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="上次执行" width="160">
+        <el-table-column label="上次执行" width="170">
           <template #default="{ row }">
             <div class="exec-info">
               <div class="exec-time">{{ row.lastExecutionAt ? formatDateTime(row.lastExecutionAt) : '-' }}</div>
@@ -173,6 +173,19 @@
                 耗时: {{ formatDuration(row.lastDurationMs) }}
               </div>
             </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="上次结果" width="100">
+          <template #default="{ row }">
+            <el-tag v-if="row.lastExecutionStatus" size="small" :type="getLogStatusTagType(row.lastExecutionStatus)" effect="dark" round>
+              {{ getLogStatusLabel(row.lastExecutionStatus) }}
+            </el-tag>
+            <span v-else class="muted">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="输出摘要" min-width="200" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="summary-text">{{ row.lastExecutionSummary || '-' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="下次执行" width="160">
@@ -935,6 +948,16 @@ onMounted(() => {
 .exec-duration {
   font-size: 12px;
   color: #94a3b8;
+}
+
+.muted {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.summary-text {
+  color: #475569;
+  font-size: 13px;
 }
 
 .retry-info {

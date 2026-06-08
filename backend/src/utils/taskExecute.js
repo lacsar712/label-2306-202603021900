@@ -86,6 +86,8 @@ const executeTask = async (taskId, triggeredBy) => {
         status: 'RUNNING',
         lastExecutionAt: new Date(),
         lastDurationMs: duration,
+        lastExecutionStatus: 'SUCCESS',
+        lastExecutionSummary: outputSummary,
         consecutiveFailures: 0,
         nextExecutionAt: nextAt,
       },
@@ -116,12 +118,15 @@ const executeTask = async (taskId, triggeredBy) => {
       newStatus = 'ERROR';
     }
     const nextAt = taskCore.calculateNextExecution(task.cronExpression);
+    const failSummary = (status === 'TIMEOUT' ? '[超时] ' : '[失败] ') + (error.message || '') + '';
     const updatedTask = await prisma.scheduledTask.update({
       where: { id: task.id },
       data: {
         status: newStatus,
         lastExecutionAt: new Date(),
         lastDurationMs: duration,
+        lastExecutionStatus: status,
+        lastExecutionSummary: failSummary.slice(0, 1000),
         consecutiveFailures: newConsecutive,
         nextExecutionAt: nextAt,
       },

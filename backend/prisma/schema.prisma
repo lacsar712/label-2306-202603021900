@@ -821,6 +821,8 @@ model ScheduledTask {
   lastExecutionAt      DateTime?
   nextExecutionAt      DateTime?
   lastDurationMs       Int?                @default(0)
+  lastExecutionStatus  TaskExecutionStatus?
+  lastExecutionSummary String?             @db.Text
   timeoutSeconds       Int                 @default(300)
   maxRetryCount        Int                 @default(3)
   retryIntervalSeconds Int                 @default(60)
