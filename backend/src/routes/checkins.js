@@ -63,18 +63,19 @@ const calculateConsecutiveDays = async (memberId, signinDate, tx) => {
 };
 
 const calculateBasePoints = (consecutiveDays, config) => {
-  let totalPoints = config.basePoints || DEFAULT_CONFIG.basePoints;
+  const basePoints = config.basePoints || DEFAULT_CONFIG.basePoints;
   const rules = config.consecutiveBonusRules || DEFAULT_CONFIG.consecutiveBonusRules;
 
+  let consecutiveBonus = 0;
   const sortedRules = [...rules].sort((a, b) => b.days - a.days);
   for (const rule of sortedRules) {
     if (consecutiveDays >= rule.days) {
-      totalPoints += rule.bonusPoints;
+      consecutiveBonus = rule.bonusPoints;
       break;
     }
   }
 
-  return totalPoints;
+  return { basePoints, consecutiveBonus, totalPoints: basePoints + consecutiveBonus };
 };
 
 const getMonthDateRange = (year, month) => {
@@ -150,9 +151,9 @@ router.post('/', authenticate, async (req, res) => {
       if (!memberTx) throw Object.assign(new Error('会员不存在'), { status: 404 });
 
       const consecutiveDays = await calculateConsecutiveDays(memberId, today, tx);
-      const basePoints = calculateBasePoints(consecutiveDays, config);
+      const { basePoints, consecutiveBonus, totalPoints } = calculateBasePoints(consecutiveDays, config);
 
-      const applied = await applyCampaigns(ACTION_TYPES.SIGNIN, memberId, basePoints);
+      const applied = await applyCampaigns(ACTION_TYPES.SIGNIN, memberId, totalPoints);
 
       const signin = await tx.memberSignin.create({
         data: {
@@ -185,7 +186,8 @@ router.post('/', authenticate, async (req, res) => {
       return {
         signin,
         basePoints,
-        bonusPoints: applied.totalBonus,
+        consecutiveBonus,
+        campaignBonus: applied.totalBonus,
         finalPoints: applied.finalValue,
         consecutiveDays,
         campaignsHit: applied.participations.map((p) => p.ruleHitDetail),
@@ -252,14 +254,14 @@ router.post('/makeup', authenticate, async (req, res) => {
       }
 
       const consecutiveDays = await calculateConsecutiveDays(memberId, targetDate, tx);
-      const basePoints = calculateBasePoints(consecutiveDays, config);
-      const netPoints = basePoints - config.makeupCostPoints;
+      const { basePoints, consecutiveBonus, totalPoints } = calculateBasePoints(consecutiveDays, config);
+      const netPoints = totalPoints - config.makeupCostPoints;
 
       const signin = await tx.memberSignin.create({
         data: {
           memberId,
           signinDate: targetDate,
-          points: basePoints,
+          points: totalPoints,
           consecutiveDays,
           isMakeup: true,
           makeupCostPoints: config.makeupCostPoints,
@@ -274,8 +276,8 @@ router.post('/makeup', authenticate, async (req, res) => {
       await tx.memberPointsLog.create({
         data: {
           memberId,
-          changePoints: basePoints,
-          balanceAfter: memberTx.points + netPoints + config.makeupCostPoints - basePoints + basePoints,
+          changePoints: totalPoints,
+          balanceAfter: memberTx.points + netPoints + config.makeupCostPoints - totalPoints + totalPoints,
           reason: 'SIGNIN_MAKEUP',
         },
       });
@@ -291,7 +293,9 @@ router.post('/makeup', authenticate, async (req, res) => {
 
       return {
         signin,
-        earnedPoints: basePoints,
+        basePoints,
+        consecutiveBonus,
+        earnedPoints: totalPoints,
         costPoints: config.makeupCostPoints,
         netPoints,
         consecutiveDays,

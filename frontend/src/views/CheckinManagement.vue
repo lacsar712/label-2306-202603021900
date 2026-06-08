@@ -102,8 +102,11 @@
                     </div>
                     <el-descriptions :column="1" border size="small">
                       <el-descriptions-item label="基础积分">{{ lastSigninResult.basePoints }}</el-descriptions-item>
-                      <el-descriptions-item label="活动加成">
-                        <span class="accent">+{{ lastSigninResult.bonusPoints }}</span>
+                      <el-descriptions-item label="连续签到奖励" v-if="lastSigninResult.consecutiveBonus > 0">
+                        <span class="success">+{{ lastSigninResult.consecutiveBonus }}</span>
+                      </el-descriptions-item>
+                      <el-descriptions-item label="活动加成" v-if="(lastSigninResult.campaignBonus ?? lastSigninResult.bonusPoints) > 0">
+                        <span class="accent">+{{ lastSigninResult.campaignBonus ?? lastSigninResult.bonusPoints }}</span>
                       </el-descriptions-item>
                       <el-descriptions-item label="实际获得">
                         <span class="strong">+{{ lastSigninResult.finalPoints }}</span>
@@ -577,7 +580,10 @@ const handleMakeupSignin = async () => {
     makingUp.value = true;
     try {
       const result = await checkinApi.makeupSignin(filterForm.memberId, makeupForm.signinDate);
-      ElMessage.success(`补签成功！获得${result.earnedPoints}积分，消耗${result.costPoints}积分，净得${result.netPoints}积分`);
+      const consecutiveMsg = result.consecutiveBonus > 0
+        ? `（基础${result.basePoints} + 连续奖励${result.consecutiveBonus}）`
+        : `（基础${result.basePoints}）`;
+      ElMessage.success(`补签成功！获得${result.earnedPoints}积分${consecutiveMsg}，消耗${result.costPoints}积分，净得${result.netPoints}积分`);
       makeupDialogVisible.value = false;
       loadCalendar();
       loadHistory();
@@ -894,6 +900,11 @@ onMounted(async () => {
 
 .accent {
   color: #ef4444;
+  font-weight: 600;
+}
+
+.success {
+  color: #22c55e;
   font-weight: 600;
 }
 
