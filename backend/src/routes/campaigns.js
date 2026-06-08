@@ -3,7 +3,7 @@ const router = express.Router();
 const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
 const { authenticate } = require('../middleware/auth');
-const { CampaignSchema, CampaignUpdateSchema, CampaignStatusTransitionSchema } = require('../validations/schemas');
+const { CampaignSchema, CampaignUpdateSchema, CampaignStatusTransitionSchema, CampaignEnabledToggleSchema } = require('../validations/schemas');
 const { z } = require('zod');
 const { getActiveCampaignsForBanner, getCampaignStats, applyCampaigns, saveParticipations, ACTION_TYPES } = require('../utils/campaignService');
 
@@ -21,6 +21,31 @@ router.get('/active', authenticate, async (req, res) => {
     res.json(campaigns);
   } catch (error) {
     logger.error('Error fetching active campaigns', { error: error.message });
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+router.get('/meta', authenticate, async (req, res) => {
+  try {
+    const channels = await prisma.channel.findMany({
+      where: { isActive: true },
+      select: { id: true, code: true, name: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+    const members = await prisma.member.findMany({
+      where: { tags: { not: null } },
+      select: { tags: true },
+    });
+    const tagSet = new Set();
+    for (const m of members) {
+      if (Array.isArray(m.tags)) {
+        for (const t of m.tags) tagSet.add(t);
+      }
+    }
+    const tags = Array.from(tagSet).sort();
+    res.json({ channels, tags });
+  } catch (error) {
+    logger.error('Error fetching campaign meta', { error: error.message });
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -111,18 +136,27 @@ router.put('/:id', authenticate, async (req, res) => {
 
     const existing = await prisma.campaign.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'Campaign not found' });
-    if (existing.status === 'ACTIVE' || existing.status === 'ENDED' || existing.status === 'VOID') {
-      return res.status(400).json({ error: 'Cannot modify campaign in current status' });
+
+    const restrictedFields = ['name', 'type', 'ruleParams', 'startTime', 'endTime', 'applicableLevels', 'applicableTags', 'applicableChannels', 'participationLimit', 'mutualExclusionGroup', 'priority', 'status'];
+    const hasRestricted = Object.keys(data).some((k) => restrictedFields.includes(k));
+    if (hasRestricted && (existing.status === 'ACTIVE' || existing.status === 'ENDED' || existing.status === 'VOID')) {
+      return res.status(400).json({ error: 'Cannot modify campaign core fields in current status' });
+    }
+
+    const updateData = { ...data };
+    if (data.applicableLevels !== undefined) {
+      updateData.applicableLevels = data.applicableLevels;
+    }
+    if (data.applicableTags !== undefined) {
+      updateData.applicableTags = data.applicableTags;
+    }
+    if (data.applicableChannels !== undefined) {
+      updateData.applicableChannels = data.applicableChannels;
     }
 
     const campaign = await prisma.campaign.update({
       where: { id },
-      data: {
-        ...data,
-        applicableLevels: data.applicableLevels !== undefined ? data.applicableLevels : existing.applicableLevels,
-        applicableTags: data.applicableTags !== undefined ? data.applicableTags : existing.applicableTags,
-        applicableChannels: data.applicableChannels !== undefined ? data.applicableChannels : existing.applicableChannels,
-      },
+      data: updateData,
     });
     res.json(campaign);
   } catch (error) {
@@ -130,6 +164,45 @@ router.put('/:id', authenticate, async (req, res) => {
       return res.status(400).json({ error: error.errors });
     }
     logger.error('Error updating campaign', { id: req.params.id, error: error.message });
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+router.post('/:id/enabled', authenticate, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { enabled } = CampaignEnabledToggleSchema.parse(req.body);
+    const existing = await prisma.campaign.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: 'Campaign not found' });
+
+    if (enabled && existing.mutualExclusionGroup && existing.status === 'ACTIVE') {
+      const conflict = await prisma.campaign.findFirst({
+        where: {
+          id: { not: id },
+          status: 'ACTIVE',
+          enabled: true,
+          mutualExclusionGroup: existing.mutualExclusionGroup,
+          startTime: { lte: existing.endTime },
+          endTime: { gte: existing.startTime },
+        },
+      });
+      if (conflict) {
+        return res.status(400).json({
+          error: `Conflict with existing enabled active campaign in the same mutual exclusion group: ${conflict.name}`,
+        });
+      }
+    }
+
+    const campaign = await prisma.campaign.update({
+      where: { id },
+      data: { enabled },
+    });
+    res.json(campaign);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors });
+    }
+    logger.error('Error toggling campaign enabled', { id: req.params.id, error: error.message });
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });

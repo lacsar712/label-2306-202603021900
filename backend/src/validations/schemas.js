@@ -7,6 +7,7 @@ const MemberSchema = z.object({
   level: z.enum(['NORMAL', 'SILVER', 'GOLD', 'PLATINUM']).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).optional(),
   points: z.number().int().optional(),
+  tags: z.array(z.string()).optional().nullable(),
   sourceChannelId: z.number().int().positive().optional().nullable(),
   firstTouchAt: z.string().datetime().optional().nullable(),
   utmSource: z.string().optional().nullable(),
@@ -157,6 +158,10 @@ const CampaignUpdateSchema = CampaignSchema.partial();
 
 const CampaignStatusTransitionSchema = z.object({
   status: CampaignStatusSchema,
+});
+
+const CampaignEnabledToggleSchema = z.object({
+  enabled: z.boolean(),
 });
 
 const SigninSchema = z.object({
@@ -407,6 +412,7 @@ module.exports = {
   CampaignSchema,
   CampaignUpdateSchema,
   CampaignStatusTransitionSchema,
+  CampaignEnabledToggleSchema,
   SigninSchema,
   MakeupSigninSchema,
   SigninConfigSchema,

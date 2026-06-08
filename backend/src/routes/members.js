@@ -60,6 +60,7 @@ router.get('/', authenticate, async (req, res) => {
       level: m.level,
       status: m.status,
       points: m.points,
+      tags: m.tags,
       joinDate: m.joinDate,
       updatedAt: m.updatedAt,
       sourceChannelId: m.sourceChannelId,

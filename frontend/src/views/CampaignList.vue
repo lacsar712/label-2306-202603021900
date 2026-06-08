@@ -64,6 +64,14 @@
           </template>
         </el-table-column>
         <el-table-column prop="participationCount" label="参与人次" width="100" align="center" />
+        <el-table-column label="启用" width="80" align="center">
+          <template #default="{ row }">
+            <el-switch
+              v-model="row.enabled"
+              @change="(val) => handleToggleEnabled(row, val)"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="handleViewStats(row)">数据</el-button>
@@ -138,6 +146,37 @@
             <el-option label="黄金会员" value="GOLD" />
             <el-option label="铂金会员" value="PLATINUM" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="适用会员标签" prop="applicableTags">
+          <el-select
+            v-model="form.applicableTags"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            placeholder="不选表示适用所有标签"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="tag in store.meta.tags"
+              :key="tag"
+              :label="tag"
+              :value="tag"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="适用来源渠道" prop="applicableChannels">
+          <el-select v-model="form.applicableChannels" multiple placeholder="不选表示适用所有渠道" style="width: 100%">
+            <el-option
+              v-for="ch in store.meta.channels"
+              :key="ch.code"
+              :label="ch.name"
+              :value="ch.code"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="启用活动" prop="enabled">
+          <el-switch v-model="form.enabled" />
         </el-form-item>
         <el-row :gutter="16">
           <el-col :span="12">
@@ -302,6 +341,9 @@ const form = reactive({
   startTime: '',
   endTime: '',
   applicableLevels: [],
+  applicableTags: [],
+  applicableChannels: [],
+  enabled: true,
   participationLimit: 0,
   mutualExclusionGroup: '',
   priority: 0,
@@ -388,6 +430,9 @@ const resetForm = () => {
   form.startTime = '';
   form.endTime = '';
   form.applicableLevels = [];
+  form.applicableTags = [];
+  form.applicableChannels = [];
+  form.enabled = true;
   form.participationLimit = 0;
   form.mutualExclusionGroup = '';
   form.priority = 0;
@@ -410,6 +455,9 @@ const handleEdit = (row) => {
   form.startTime = row.startTime;
   form.endTime = row.endTime;
   form.applicableLevels = row.applicableLevels || [];
+  form.applicableTags = row.applicableTags || [];
+  form.applicableChannels = row.applicableChannels || [];
+  form.enabled = !!row.enabled;
   form.participationLimit = row.participationLimit || 0;
   form.mutualExclusionGroup = row.mutualExclusionGroup || '';
   form.priority = row.priority || 0;
@@ -429,6 +477,12 @@ const handleSubmit = async () => {
       const data = { ...form };
       if (!data.applicableLevels || data.applicableLevels.length === 0) {
         data.applicableLevels = null;
+      }
+      if (!data.applicableTags || data.applicableTags.length === 0) {
+        data.applicableTags = null;
+      }
+      if (!data.applicableChannels || data.applicableChannels.length === 0) {
+        data.applicableChannels = null;
       }
       if (!data.mutualExclusionGroup) {
         data.mutualExclusionGroup = null;
@@ -461,6 +515,15 @@ const handleStatusChange = async (row, targetStatus) => {
   }
 };
 
+const handleToggleEnabled = async (row, val) => {
+  try {
+    await store.toggleEnabled(row.id, val);
+    ElMessage.success(val ? '活动已启用' : '活动已停用');
+  } catch (e) {
+    row.enabled = !val;
+  }
+};
+
 const handleDelete = async (row) => {
   try {
     await ElMessageBox.confirm(`确定要删除活动「${row.name}」吗？`, '删除确认', {
@@ -487,6 +550,7 @@ const handleViewStats = async (row) => {
 
 onMounted(() => {
   fetchList();
+  store.fetchMeta();
 });
 </script>
 

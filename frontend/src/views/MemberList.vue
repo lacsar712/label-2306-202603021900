@@ -63,6 +63,16 @@
           </template>
         </el-table-column>
         <el-table-column prop="points" label="积分" min-width="80" />
+        <el-table-column label="标签" min-width="160">
+          <template #default="{ row }">
+            <template v-if="row.tags && row.tags.length > 0">
+              <el-tag v-for="t in row.tags" :key="t" size="small" effect="plain" style="margin-right: 4px; margin-bottom: 2px">
+                {{ t }}
+              </el-tag>
+            </template>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="工单统计" min-width="160">
           <template #default="{ row }">
             <div class="ticket-stats">
@@ -193,6 +203,24 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="会员标签" prop="tags">
+          <el-select
+            v-model="form.tags"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            placeholder="可手动输入或从已有标签中选择"
+            class="w-full"
+          >
+            <el-option
+              v-for="tag in memberTagOptions"
+              :key="tag"
+              :label="tag"
+              :value="tag"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="首次触达时间" prop="firstTouchAt">
           <el-date-picker
             v-model="form.firstTouchAt"
@@ -311,7 +339,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive, watch } from 'vue';
+import { ref, onMounted, reactive, watch, computed } from 'vue';
 import { useMemberStore } from '../stores/member';
 import { useReferralStore } from '../stores/referral';
 import { useChannelStore } from '../stores/channel';
@@ -343,6 +371,7 @@ const form = reactive({
   level: 'NORMAL',
   points: 0,
   status: 'ACTIVE',
+  tags: [],
   sourceChannelId: null,
   firstTouchAt: '',
   utmSource: '',
@@ -352,6 +381,16 @@ const form = reactive({
   referrerName: '',
   referrerPhone: '',
   bindReferralCode: '',
+});
+
+const memberTagOptions = computed(() => {
+  const set = new Set();
+  for (const m of memberStore.members) {
+    if (Array.isArray(m.tags)) {
+      for (const t of m.tags) set.add(t);
+    }
+  }
+  return Array.from(set).sort();
 });
 
 const rules = {
@@ -378,6 +417,7 @@ const loadChannels = async () => {
 const handleEdit = (row) => {
   isEdit.value = true;
   Object.assign(form, row);
+  form.tags = Array.isArray(row.tags) ? [...row.tags] : [];
   if (row.referrer) {
     form.referrerName = row.referrer.name;
     form.referrerPhone = row.referrer.phone;
@@ -399,6 +439,7 @@ const resetForm = () => {
   form.level = 'NORMAL';
   form.points = 0;
   form.status = 'ACTIVE';
+  form.tags = [];
   form.sourceChannelId = null;
   form.firstTouchAt = '';
   form.utmSource = '';

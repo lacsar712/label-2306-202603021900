@@ -13,6 +13,9 @@ export default {
   getActive() {
     return api.get('/campaigns/active');
   },
+  getMeta() {
+    return api.get('/campaigns/meta');
+  },
   create(data) {
     return api.post('/campaigns', data);
   },
@@ -21,6 +24,9 @@ export default {
   },
   updateStatus(id, status) {
     return api.post(`/campaigns/${id}/status`, { status });
+  },
+  toggleEnabled(id, enabled) {
+    return api.post(`/campaigns/${id}/enabled`, { enabled });
   },
   remove(id) {
     return api.delete(`/campaigns/${id}`);

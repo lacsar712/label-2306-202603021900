@@ -19,6 +19,15 @@ const isMemberEligible = (campaign, member) => {
   if (campaign.applicableLevels && campaign.applicableLevels.length > 0) {
     if (!campaign.applicableLevels.includes(member.level)) return false;
   }
+  if (campaign.applicableTags && campaign.applicableTags.length > 0) {
+    const memberTags = Array.isArray(member.tags) ? member.tags : [];
+    const hasTag = campaign.applicableTags.some((t) => memberTags.includes(t));
+    if (!hasTag) return false;
+  }
+  if (campaign.applicableChannels && campaign.applicableChannels.length > 0) {
+    const channelCode = member.sourceChannel?.code;
+    if (!channelCode || !campaign.applicableChannels.includes(channelCode)) return false;
+  }
   return true;
 };
 
@@ -120,7 +129,10 @@ const computeBonus = (campaign, actionType, originalValue, member) => {
 };
 
 const applyCampaigns = async (actionType, memberId, originalValue) => {
-  const member = await prisma.member.findUnique({ where: { id: memberId } });
+  const member = await prisma.member.findUnique({
+    where: { id: memberId },
+    include: { sourceChannel: { select: { code: true } } },
+  });
   if (!member) return { finalValue: originalValue, totalBonus: 0, participations: [] };
 
   const campaigns = await findActiveCampaigns(actionType, member);

@@ -42,6 +42,7 @@ model Member {
   frozenPoints    Int         @default(0)
   joinDate        DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
+  tags            Json?
   sourceChannelId Int?
   sourceChannel   Channel?    @relation("MemberSourceChannel", fields: [sourceChannelId], references: [id])
   firstTouchAt    DateTime?

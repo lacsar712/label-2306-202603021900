@@ -5,6 +5,7 @@ export const useCampaignStore = defineStore('campaign', {
   state: () => ({
     campaigns: [],
     activeCampaigns: [],
+    meta: { channels: [], tags: [] },
     loading: false,
   }),
   actions: {
@@ -23,6 +24,13 @@ export const useCampaignStore = defineStore('campaign', {
         console.error(e);
       }
     },
+    async fetchMeta() {
+      try {
+        this.meta = await campaignApi.getMeta();
+      } catch (e) {
+        console.error(e);
+      }
+    },
     async createCampaign(data) {
       const result = await campaignApi.create(data);
       await this.fetchCampaigns();
@@ -35,6 +43,12 @@ export const useCampaignStore = defineStore('campaign', {
     },
     async updateStatus(id, status) {
       const result = await campaignApi.updateStatus(id, status);
+      await this.fetchCampaigns();
+      await this.fetchActiveCampaigns();
+      return result;
+    },
+    async toggleEnabled(id, enabled) {
+      const result = await campaignApi.toggleEnabled(id, enabled);
       await this.fetchCampaigns();
       await this.fetchActiveCampaigns();
       return result;
