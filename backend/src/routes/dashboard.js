@@ -400,48 +400,69 @@ router.get('/data/points-expiry', authenticate, async (req, res) => {
   try {
     const accessibleIds = await getAccessibleChannelIds(req.user);
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const in7Days = new Date(today); in7Days.setDate(in7Days.getDate() + 7);
-    const in30Days = new Date(today); in30Days.setDate(in30Days.getDate() + 30);
+    const in7Days = new Date(today); in7Days.setDate(in7Days.getDate() + 7); in7Days.setHours(23, 59, 59, 999);
+    const in30Days = new Date(today); in30Days.setDate(in30Days.getDate() + 30); in30Days.setHours(23, 59, 59, 999);
+    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    const [expiring7d, expiring30d] = await Promise.all([
+    const memberWhere = { sourceChannelId: { in: accessibleIds } };
+
+    const ledgerBaseWhere = {
+      status: 'ACTIVE',
+      remainingPoints: { gt: 0 },
+      exempted: false,
+      member: memberWhere,
+    };
+
+    const [expiring7d, expiring30d, expiringThisMonth, executionHistory] = await Promise.all([
       prisma.pointsLedger.aggregate({
-        where: {
-          status: 'ACTIVE',
-          expireAt: { gte: today, lte: in7Days },
-          member: { sourceChannelId: { in: accessibleIds } },
-        },
+        where: { ...ledgerBaseWhere, expireAt: { gte: today, lte: in7Days } },
         _sum: { remainingPoints: true },
       }),
       prisma.pointsLedger.aggregate({
-        where: {
-          status: 'ACTIVE',
-          expireAt: { gte: today, lte: in30Days },
-          member: { sourceChannelId: { in: accessibleIds } },
-        },
+        where: { ...ledgerBaseWhere, expireAt: { gte: today, lte: in30Days } },
         _sum: { remainingPoints: true },
+      }),
+      prisma.pointsLedger.findMany({
+        where: { ...ledgerBaseWhere, expireAt: { gte: today, lte: endOfMonth } },
+        include: { member: { select: { id: true, name: true, phone: true } } },
+        orderBy: { expireAt: 'asc' },
+        take: 50,
+      }),
+      prisma.pointsExpiryExecution.findMany({
+        orderBy: { executionDate: 'desc' },
+        take: 7,
       }),
     ]);
 
-    const topMembers = await prisma.pointsLedger.findMany({
-      where: {
-        status: 'ACTIVE',
-        expireAt: { gte: today, lte: in30Days },
-        member: { sourceChannelId: { in: accessibleIds } },
-      },
-      include: { member: { select: { id: true, name: true, phone: true } } },
-      orderBy: { expireAt: 'asc' },
-      take: 10,
+    const affectedMemberIds = new Set();
+    let totalThisMonth = 0;
+    expiringThisMonth.forEach(l => {
+      affectedMemberIds.add(l.memberId);
+      totalThisMonth += l.remainingPoints;
     });
+
+    const topMembers = expiringThisMonth.slice(0, 10).map(l => ({
+      memberId: l.memberId,
+      memberName: l.member.name,
+      memberPhone: l.member.phone,
+      points: l.remainingPoints,
+      expireAt: l.expireAt,
+    }));
 
     res.json({
       expiring7Days: expiring7d._sum.remainingPoints || 0,
       expiring30Days: expiring30d._sum.remainingPoints || 0,
-      topMembers: topMembers.map(l => ({
-        memberId: l.memberId,
-        memberName: l.member.name,
-        memberPhone: l.member.phone,
-        points: l.remainingPoints,
-        expireAt: l.expireAt,
+      expiringThisMonth: totalThisMonth,
+      affectedMembersThisMonth: affectedMemberIds.size,
+      topMembers,
+      executionHistory: executionHistory.map(e => ({
+        id: e.id,
+        executionDate: e.executionDate,
+        handledType: e.handledType,
+        totalExpiredPoints: e.totalExpiredPoints,
+        totalFrozenPoints: e.totalFrozenPoints,
+        affectedMembers: e.affectedMembers,
+        createdAt: e.createdAt,
       })),
     });
   } catch (error) {
