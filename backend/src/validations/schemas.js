@@ -283,8 +283,8 @@ const NotificationVariableSchema = z.object({
 
 const ChannelRuleSchema = z.object({
   enabled: z.boolean().default(true),
-  titleTemplate: z.string().optional(),
-  contentTemplate: z.string().optional(),
+  titleTemplate: z.string().nullable().optional(),
+  contentTemplate: z.string().nullable().optional(),
 });
 
 const NotificationTemplateSchema = z.object({

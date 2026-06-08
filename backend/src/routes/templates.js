@@ -105,12 +105,22 @@ router.post('/preview', authenticate, async (req, res) => {
     res.json(result);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
+      return res.status(400).json({ error: formatZodError(error) });
     }
     logger.error('Error previewing template', { error: error.message });
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+function formatZodError(err) {
+  if (err && err.errors && Array.isArray(err.errors)) {
+    return err.errors.map((e) => {
+      const path = e.path && e.path.length ? e.path.join('.') : '';
+      return path ? `${path}: ${e.message}` : e.message;
+    }).join('; ');
+  }
+  return '参数校验失败';
+}
 
 router.post('/', authenticate, async (req, res) => {
   try {
@@ -157,7 +167,7 @@ router.post('/', authenticate, async (req, res) => {
     res.status(201).json(template);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
+      return res.status(400).json({ error: formatZodError(error) });
     }
     logger.error('Error creating template', { error: error.message });
     res.status(500).json({ error: 'Internal Server Error' });
@@ -220,7 +230,7 @@ router.put('/:id', authenticate, async (req, res) => {
     res.json(template);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
+      return res.status(400).json({ error: formatZodError(error) });
     }
     logger.error('Error updating template', { id: req.params.id, error: error.message });
     res.status(500).json({ error: 'Internal Server Error' });
@@ -265,7 +275,7 @@ router.post('/:id/versions', authenticate, async (req, res) => {
     res.status(201).json(version);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
+      return res.status(400).json({ error: formatZodError(error) });
     }
     logger.error('Error creating template version', { id: req.params.id, error: error.message });
     res.status(500).json({ error: 'Internal Server Error' });
@@ -295,7 +305,7 @@ router.post('/:id/rollback', authenticate, async (req, res) => {
     res.json({ success: true, message: `已回滚到版本 ${version.versionNumber}` });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
+      return res.status(400).json({ error: formatZodError(error) });
     }
     logger.error('Error rolling back template', { id: req.params.id, error: error.message });
     res.status(500).json({ error: 'Internal Server Error' });
@@ -327,7 +337,7 @@ router.post('/:id/status', authenticate, async (req, res) => {
     res.json(template);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
+      return res.status(400).json({ error: formatZodError(error) });
     }
     logger.error('Error transitioning template status', { id: req.params.id, error: error.message });
     res.status(500).json({ error: 'Internal Server Error' });
@@ -408,7 +418,7 @@ router.post('/send', authenticate, async (req, res) => {
     res.status(201).json(record);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
+      return res.status(400).json({ error: formatZodError(error) });
     }
     logger.error('Error sending notification', { error: error.message });
     res.status(500).json({ error: 'Internal Server Error' });

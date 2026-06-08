@@ -442,11 +442,12 @@ const refreshPreview = async () => {
 
   const sampleVars = {};
   allVariables.value.forEach((v) => {
-    if (v.type === 'NUMBER') {
+    const t = (v.type || 'string').toLowerCase();
+    if (t === 'number') {
       sampleVars[v.name] = 100;
-    } else if (v.type === 'DATE') {
+    } else if (t === 'date') {
       sampleVars[v.name] = '2026-06-08';
-    } else if (v.type === 'BOOLEAN') {
+    } else if (t === 'boolean') {
       sampleVars[v.name] = true;
     } else {
       const samples = {
@@ -552,49 +553,69 @@ const handleClose = () => {
 
 const handleSubmit = async () => {
   if (!formRef.value) return;
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return;
-    if (!form.channels || form.channels.length === 0) {
-      ElMessage.warning('请至少选择一个渠道');
-      return;
-    }
+  try {
+    await formRef.value.validate();
+  } catch (e) {
+    ElMessage.warning('请完整填写必填项后再提交');
+    activeTab.value = 'basic';
+    return;
+  }
 
-    submitting.value = true;
-    try {
-      const channelRules = {};
-      for (const ch of form.channels) {
-        const rule = form.channelRules[ch] || {};
-        channelRules[ch] = {
-          enabled: true,
-          titleTemplate: rule.titleTemplate || null,
-          contentTemplate: rule.contentTemplate || null,
-        };
-      }
+  if (!form.channels || form.channels.length === 0) {
+    ElMessage.warning('请至少选择一个渠道');
+    activeTab.value = 'basic';
+    return;
+  }
+  if (!form.titleTemplate || !form.contentTemplate) {
+    ElMessage.warning('请填写标题模板和内容模板');
+    activeTab.value = 'content';
+    return;
+  }
 
-      const data = {
-        name: form.name,
-        category: form.category,
-        channels: form.channels,
-        variables: form.variables,
-        titleTemplate: form.titleTemplate,
-        contentTemplate: form.contentTemplate,
-        channelRules,
+  const invalidVars = form.variables.filter((v) => !v.name || !v.label);
+  if (invalidVars.length > 0) {
+    ElMessage.warning('请完整填写所有自定义变量的变量名和显示标签');
+    activeTab.value = 'basic';
+    return;
+  }
+
+  submitting.value = true;
+  try {
+    const channelRules = {};
+    for (const ch of form.channels) {
+      const rule = form.channelRules[ch] || {};
+      channelRules[ch] = {
+        enabled: true,
+        titleTemplate: rule.titleTemplate || null,
+        contentTemplate: rule.contentTemplate || null,
       };
-
-      if (isEdit.value) {
-        await store.updateTemplate(props.template.id, data);
-        ElMessage.success('模板已更新');
-      } else {
-        await store.createTemplate(data);
-        ElMessage.success('模板已创建');
-      }
-
-      emit('success');
-      emit('update:modelValue', false);
-    } finally {
-      submitting.value = false;
     }
-  });
+
+    const validVariables = form.variables.filter((v) => v.name && v.label);
+
+    const data = {
+      name: form.name,
+      category: form.category,
+      channels: form.channels,
+      variables: validVariables,
+      titleTemplate: form.titleTemplate,
+      contentTemplate: form.contentTemplate,
+      channelRules,
+    };
+
+    if (isEdit.value) {
+      await store.updateTemplate(props.template.id, data);
+    } else {
+      await store.createTemplate(data);
+    }
+
+    emit('success');
+    emit('update:modelValue', false);
+  } catch (e) {
+    console.error('Submit error:', e);
+  } finally {
+    submitting.value = false;
+  }
 };
 
 onMounted(() => {
