@@ -112,6 +112,25 @@
                 <span>{{ row.bindSource || '-' }}</span>
               </template>
             </el-table-column>
+            <el-table-column label="推荐码" width="160">
+              <template #default="{ row }">
+                <template v-if="row.referralCode">
+                  <el-tag
+                    size="small"
+                    class="font-mono"
+                    :type="row.referralCode.type === 'CAMPAIGN' ? 'warning' : 'primary'"
+                    effect="plain"
+                  >
+                    {{ row.referralCode.code }}
+                  </el-tag>
+                  <div class="text-xs text-muted mt-4">
+                    {{ row.referralCode.type === 'CAMPAIGN' ? '活动码' : '个人码' }}
+                    <span v-if="row.referralCode.campaignName"> · {{ row.referralCode.campaignName }}</span>
+                  </div>
+                </template>
+                <span v-else class="text-muted">-</span>
+              </template>
+            </el-table-column>
             <el-table-column label="奖励发放" min-width="240">
               <template #default="{ row }">
                 <div class="reward-stages">

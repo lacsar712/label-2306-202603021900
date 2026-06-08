@@ -306,6 +306,7 @@ router.get('/binds', authenticate, async (req, res) => {
       include: {
         referrer: { select: { id: true, name: true, phone: true, level: true } },
         referee: { select: { id: true, name: true, phone: true, level: true, joinDate: true } },
+        referralCode: { select: { id: true, code: true, type: true, campaignName: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -553,10 +554,12 @@ router.put('/anomalies/:id/mark', authenticate, async (req, res) => {
 router.get('/overview', authenticate, async (req, res) => {
   try {
     const totalBinds = await prisma.referralBind.count({ where: { isActive: true } });
-    const totalReferrers = await prisma.member.findMany({
-      where: { referrals: { some: {} } },
-      select: { id: true },
-    });
+    const referrerRows = await prisma.$queryRaw`
+      SELECT COUNT(DISTINCT referrerId) as cnt
+      FROM referral_binds
+      WHERE isActive = 1
+    `;
+    const totalReferrers = referrerRows[0]?.cnt || 0;
     const pendingRewards = await prisma.referralReward.count({ where: { status: 'PENDING' } });
     const distributedPoints = await prisma.referralReward.aggregate({
       where: { status: 'DISTRIBUTED' },
@@ -573,14 +576,14 @@ router.get('/overview', authenticate, async (req, res) => {
 
     res.json({
       totalBinds,
-      totalReferrers: totalReferrers.length,
+      totalReferrers,
       pendingRewards,
       distributedPoints: distributedPoints._sum.points || 0,
       anomalyCount,
       newThisMonth,
     });
   } catch (error) {
-    logger.error('Error fetching referral overview', { error: error.message });
+    logger.error('Error fetching referral overview', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
