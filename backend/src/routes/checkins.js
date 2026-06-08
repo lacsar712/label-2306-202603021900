@@ -10,6 +10,7 @@ const {
   SigninConfigSchema,
 } = require('../validations/schemas');
 const { applyCampaigns, saveParticipations, ACTION_TYPES } = require('../utils/campaignService');
+const { checkAndBlock } = require('../utils/blacklistService');
 
 const DEFAULT_CONFIG = {
   basePoints: 10,
@@ -131,14 +132,22 @@ router.post('/', authenticate, async (req, res) => {
     const today = stripTime(new Date());
     const config = await getOrCreateConfig();
 
+    const member = await prisma.member.findUnique({ where: { id: memberId } });
+    if (!member) return res.status(404).json({ error: '会员不存在' });
+
+    const blockCheck = await checkAndBlock(memberId, member.phone, 'SIGNIN', req.user.id, '签到管理签到');
+    if (blockCheck.blocked) {
+      return res.status(403).json({ error: blockCheck.message });
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const existing = await tx.memberSignin.findFirst({
         where: { memberId, signinDate: today },
       });
       if (existing) throw Object.assign(new Error('今日已签到'), { status: 400 });
 
-      const member = await tx.member.findUnique({ where: { id: memberId } });
-      if (!member) throw Object.assign(new Error('会员不存在'), { status: 404 });
+      const memberTx = await tx.member.findUnique({ where: { id: memberId } });
+      if (!memberTx) throw Object.assign(new Error('会员不存在'), { status: 404 });
 
       const consecutiveDays = await calculateConsecutiveDays(memberId, today, tx);
       const basePoints = calculateBasePoints(consecutiveDays, config);
@@ -165,7 +174,7 @@ router.post('/', authenticate, async (req, res) => {
         data: {
           memberId,
           changePoints: applied.finalValue,
-          balanceAfter: member.points + applied.finalValue,
+          balanceAfter: memberTx.points + applied.finalValue,
           reason: 'SIGNIN',
           campaignId: applied.participations.length > 0 ? applied.participations[0].campaignId : null,
         },
@@ -207,14 +216,22 @@ router.post('/makeup', authenticate, async (req, res) => {
       return res.status(400).json({ error: '只能补签过去的日期' });
     }
 
+    const member = await prisma.member.findUnique({ where: { id: memberId } });
+    if (!member) return res.status(404).json({ error: '会员不存在' });
+
+    const blockCheck = await checkAndBlock(memberId, member.phone, 'SIGNIN', req.user.id, `补签: ${signinDate}`);
+    if (blockCheck.blocked) {
+      return res.status(403).json({ error: blockCheck.message });
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const existing = await tx.memberSignin.findFirst({
         where: { memberId, signinDate: targetDate },
       });
       if (existing) throw Object.assign(new Error('该日期已签到'), { status: 400 });
 
-      const member = await tx.member.findUnique({ where: { id: memberId } });
-      if (!member) throw Object.assign(new Error('会员不存在'), { status: 404 });
+      const memberTx = await tx.member.findUnique({ where: { id: memberId } });
+      if (!memberTx) throw Object.assign(new Error('会员不存在'), { status: 404 });
 
       const monthStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
       const monthEnd = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
@@ -230,7 +247,7 @@ router.post('/makeup', authenticate, async (req, res) => {
         throw Object.assign(new Error(`本月补签次数已达上限 (${config.monthlyMakeupLimit}次)`), { status: 400 });
       }
 
-      if (member.points < config.makeupCostPoints) {
+      if (memberTx.points < config.makeupCostPoints) {
         throw Object.assign(new Error(`积分不足，补签需要 ${config.makeupCostPoints} 积分`), { status: 400 });
       }
 
@@ -258,7 +275,7 @@ router.post('/makeup', authenticate, async (req, res) => {
         data: {
           memberId,
           changePoints: basePoints,
-          balanceAfter: member.points + netPoints + config.makeupCostPoints - basePoints + basePoints,
+          balanceAfter: memberTx.points + netPoints + config.makeupCostPoints - basePoints + basePoints,
           reason: 'SIGNIN_MAKEUP',
         },
       });
@@ -267,7 +284,7 @@ router.post('/makeup', authenticate, async (req, res) => {
         data: {
           memberId,
           changePoints: -config.makeupCostPoints,
-          balanceAfter: member.points + netPoints,
+          balanceAfter: memberTx.points + netPoints,
           reason: 'SIGNIN_MAKEUP_COST',
         },
       });

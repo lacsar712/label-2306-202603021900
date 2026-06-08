@@ -83,6 +83,11 @@ const router = createRouter({
           name: 'Templates',
           component: () => import('../views/TemplateList.vue'),
         },
+        {
+          path: 'blacklist',
+          name: 'Blacklist',
+          component: () => import('../views/BlacklistManagement.vue'),
+        },
       ],
     },
   ],

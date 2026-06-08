@@ -50,6 +50,10 @@
           <el-icon><ChatDotRound /></el-icon>
           <span>通知模板</span>
         </el-menu-item>
+        <el-menu-item index="/blacklist">
+          <el-icon><CircleClose /></el-icon>
+          <span>黑名单管理</span>
+        </el-menu-item>
       </el-menu>
       <div class="sidebar-footer">
         <el-button link @click="handleLogout" class="logout-btn">
@@ -91,7 +95,7 @@
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
-import { DataAnalysis, User, Setting, SwitchButton, UserFilled, Tickets, Present, Histogram, Calendar, Clock, Connection, ChatDotRound } from '@element-plus/icons-vue';
+import { DataAnalysis, User, Setting, SwitchButton, UserFilled, Tickets, Present, Histogram, Calendar, Clock, Connection, ChatDotRound, CircleClose } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 
 const route = useRoute();
@@ -120,6 +124,7 @@ const currentPageName = computed(() => {
   if (route.path === '/points-expiry') return '积分过期规则';
   if (route.path === '/referrals') return '推荐关系管理';
   if (route.path === '/templates') return '通知模板管理';
+  if (route.path === '/blacklist') return '黑名单管理';
   return '';
 });
 

@@ -23,6 +23,10 @@ model User {
   assignmentRules       TicketAssignmentRule[]
   managedChannels       Channel[]              @relation("ChannelManagers")
   dashboardConfig       DashboardConfig?
+  blacklistsAdded       Blacklist[]
+  blacklistsReleased    Blacklist[]            @relation("BlacklistReleasedBy")
+  blacklistsApproved    Blacklist[]            @relation("BlacklistApprovedBy")
+  blacklistAuditLogs    BlacklistAuditLog[]
 
   @@map("users")
 }
@@ -60,6 +64,8 @@ model Member {
   referralCodes ReferralCode[]
   referralRewardsAsReferrer ReferralReward[] @relation("ReferrerRewards")
   referralRewardsAsReferee ReferralReward[] @relation("RefereeRewards")
+  blacklists Blacklist[]
+  blacklistAuditLogs BlacklistAuditLog[]
 
   @@index([sourceChannelId])
   @@index([referrerId])
@@ -691,4 +697,94 @@ model NotificationSendRecord {
   @@index([status])
   @@index([channel])
   @@map("notification_send_records")
+}
+
+enum BlacklistCategory {
+  FRAUD
+  MALICIOUS_COMPLAINT
+  VIOLATION_EXCHANGE
+  ABUSIVE_BEHAVIOR
+  OTHER
+}
+
+enum BlacklistStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  RELEASED
+  REJECTED
+}
+
+enum BlacklistActionType {
+  POINTS_ADJUST
+  SIGNIN
+  EXCHANGE
+  COUPON
+  CAMPAIGN
+}
+
+model Blacklist {
+  id                Int               @id @default(autoincrement())
+  memberId          Int?
+  member            Member?           @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  phone             String
+  memberName        String?
+  category          BlacklistCategory
+  reason            String
+  evidence          String?
+  status            BlacklistStatus   @default(PENDING_APPROVAL)
+  addedAt           DateTime          @default(now())
+  addedBy           Int?
+  addedByUser       User?             @relation(fields: [addedBy], references: [id], onDelete: SetNull)
+  expectedReleaseAt DateTime?
+  releasedAt        DateTime?
+  releasedBy        Int?
+  releasedByUser    User?             @relation("BlacklistReleasedBy", fields: [releasedBy], references: [id], onDelete: SetNull)
+  releaseReason     String?
+  restoreOnRelease  Boolean           @default(true)
+  approvedAt        DateTime?
+  approvedBy        Int?
+  approvedByUser    User?             @relation("BlacklistApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  rejectReason      String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  auditLogs         BlacklistAuditLog[]
+
+  @@index([memberId])
+  @@index([phone])
+  @@index([status])
+  @@index([category])
+  @@index([expectedReleaseAt])
+  @@map("blacklists")
+}
+
+model BlacklistAuditLog {
+  id            Int                @id @default(autoincrement())
+  blacklistId   Int?
+  blacklist     Blacklist?         @relation(fields: [blacklistId], references: [id], onDelete: SetNull)
+  memberId      Int?
+  member        Member?            @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  phone         String
+  actionType    BlacklistActionType
+  actionDetail  String?
+  blocked       Boolean            @default(true)
+  operatorId    Int?
+  operator      User?              @relation(fields: [operatorId], references: [id], onDelete: SetNull)
+  createdAt     DateTime           @default(now())
+
+  @@index([memberId])
+  @@index([phone])
+  @@index([actionType])
+  @@index([createdAt])
+  @@map("blacklist_audit_logs")
+}
+
+model BlacklistConfig {
+  id                   Int      @id @default(autoincrement())
+  autoReleaseEnabled   Boolean  @default(true)
+  restoreOnAutoRelease Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
+  createdAt            DateTime @default(now())
+
+  @@map("blacklist_configs")
 }

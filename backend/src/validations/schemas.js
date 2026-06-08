@@ -338,6 +338,60 @@ const NotificationSendRecordQuerySchema = z.object({
   dateTo: z.string().optional(),
 });
 
+const BlacklistCategorySchema = z.enum(['FRAUD', 'MALICIOUS_COMPLAINT', 'VIOLATION_EXCHANGE', 'ABUSIVE_BEHAVIOR', 'OTHER']);
+const BlacklistStatusSchema = z.enum(['PENDING_APPROVAL', 'ACTIVE', 'RELEASED', 'REJECTED']);
+const BlacklistActionTypeSchema = z.enum(['POINTS_ADJUST', 'SIGNIN', 'EXCHANGE', 'COUPON', 'CAMPAIGN']);
+
+const BlacklistCreateSchema = z.object({
+  memberId: z.number().int().positive().optional().nullable(),
+  phone: z.string().regex(/^1[3-9]\d{9}$/),
+  category: BlacklistCategorySchema,
+  reason: z.string().min(1).max(500),
+  evidence: z.string().max(1000).optional().nullable(),
+  expectedReleaseAt: z.string().datetime().optional().nullable(),
+  restoreOnRelease: z.boolean().optional(),
+});
+
+const BlacklistBatchCreateSchema = z.object({
+  items: z.array(BlacklistCreateSchema).min(1),
+});
+
+const BlacklistReleaseSchema = z.object({
+  releaseReason: z.string().min(1).max(500).optional().nullable(),
+  restoreOnRelease: z.boolean().optional(),
+});
+
+const BlacklistBatchReleaseSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1),
+  releaseReason: z.string().min(1).max(500).optional().nullable(),
+  restoreOnRelease: z.boolean().optional(),
+});
+
+const BlacklistApprovalSchema = z.object({
+  rejectReason: z.string().min(1).max(500).optional().nullable(),
+});
+
+const BlacklistQuerySchema = z.object({
+  search: z.string().optional(),
+  status: BlacklistStatusSchema.optional(),
+  category: BlacklistCategorySchema.optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+});
+
+const BlacklistAuditLogQuerySchema = z.object({
+  phone: z.string().optional(),
+  memberId: z.string().optional(),
+  actionType: BlacklistActionTypeSchema.optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+});
+
+const BlacklistConfigSchema = z.object({
+  autoReleaseEnabled: z.boolean().optional(),
+  restoreOnAutoRelease: z.boolean().optional(),
+});
+
 module.exports = {
   MemberSchema,
   PointsUpdateSchema,
@@ -391,4 +445,15 @@ module.exports = {
   NotificationTemplatePreviewSchema,
   NotificationSendSchema,
   NotificationSendRecordQuerySchema,
+  BlacklistCategorySchema,
+  BlacklistStatusSchema,
+  BlacklistActionTypeSchema,
+  BlacklistCreateSchema,
+  BlacklistBatchCreateSchema,
+  BlacklistReleaseSchema,
+  BlacklistBatchReleaseSchema,
+  BlacklistApprovalSchema,
+  BlacklistQuerySchema,
+  BlacklistAuditLogQuerySchema,
+  BlacklistConfigSchema,
 };

@@ -8,6 +8,7 @@ const { z } = require('zod');
 const { applyCampaigns, saveParticipations, ACTION_TYPES } = require('../utils/campaignService');
 const { createPointsLedger, consumePointsByFIFO } = require('../utils/pointsExpiryService');
 const referralService = require('../utils/referralService');
+const { checkAndBlock } = require('../utils/blacklistService');
 
 const CLOSED_TICKET_STATUSES = ['CLOSED', 'REJECTED'];
 
@@ -274,9 +275,17 @@ router.post('/:id/points', authenticate, async (req, res) => {
     const id = parseInt(req.params.id);
     const { points } = PointsUpdateSchema.parse(req.body);
 
+    const member = await prisma.member.findUnique({ where: { id } });
+    if (!member) return res.status(404).json({ error: 'Member not found' });
+
+    const blockCheck = await checkAndBlock(id, member.phone, 'POINTS_ADJUST', req.user.id, `积分调整: ${points}`);
+    if (blockCheck.blocked) {
+      return res.status(403).json({ error: blockCheck.message });
+    }
+
     const result = await prisma.$transaction(async (tx) => {
-      const member = await tx.member.findUnique({ where: { id } });
-      if (!member) throw Object.assign(new Error('Member not found'), { status: 404 });
+      const memberTx = await tx.member.findUnique({ where: { id } });
+      if (!memberTx) throw Object.assign(new Error('Member not found'), { status: 404 });
 
       const applied = points > 0
         ? await applyCampaigns(ACTION_TYPES.POINTS_ADJUST, id, points)
@@ -298,7 +307,7 @@ router.post('/:id/points', authenticate, async (req, res) => {
         data: {
           memberId: id,
           changePoints: applied.finalValue,
-          balanceAfter: member.points + applied.finalValue,
+          balanceAfter: memberTx.points + applied.finalValue,
           reason: 'POINTS_ADJUST',
           campaignId: applied.participations.length > 0 ? applied.participations[0].campaignId : null,
         },
@@ -347,14 +356,22 @@ router.post('/signin', authenticate, async (req, res) => {
     const signinDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const basePoints = 10;
 
+    const member = await prisma.member.findUnique({ where: { id: memberId } });
+    if (!member) return res.status(404).json({ error: 'Member not found' });
+
+    const blockCheck = await checkAndBlock(memberId, member.phone, 'SIGNIN', req.user.id, '会员签到');
+    if (blockCheck.blocked) {
+      return res.status(403).json({ error: blockCheck.message });
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const existing = await tx.memberSignin.findFirst({
         where: { memberId, signinDate },
       });
       if (existing) throw Object.assign(new Error('Already signed in today'), { status: 400 });
 
-      const member = await tx.member.findUnique({ where: { id: memberId } });
-      if (!member) throw Object.assign(new Error('Member not found'), { status: 404 });
+      const memberTx = await tx.member.findUnique({ where: { id: memberId } });
+      if (!memberTx) throw Object.assign(new Error('Member not found'), { status: 404 });
 
       const applied = await applyCampaigns(ACTION_TYPES.SIGNIN, memberId, basePoints);
 
@@ -371,7 +388,7 @@ router.post('/signin', authenticate, async (req, res) => {
         data: {
           memberId,
           changePoints: applied.finalValue,
-          balanceAfter: member.points + applied.finalValue,
+          balanceAfter: memberTx.points + applied.finalValue,
           reason: 'SIGNIN',
           campaignId: applied.participations.length > 0 ? applied.participations[0].campaignId : null,
         },
@@ -432,14 +449,22 @@ router.post('/exchange', authenticate, async (req, res) => {
   try {
     const { memberId, itemName, points } = ExchangeSchema.parse(req.body);
 
+    const member = await prisma.member.findUnique({ where: { id: memberId } });
+    if (!member) return res.status(404).json({ error: 'Member not found' });
+
+    const blockCheck = await checkAndBlock(memberId, member.phone, 'EXCHANGE', req.user.id, `兑换: ${itemName}, 积分: ${points}`);
+    if (blockCheck.blocked) {
+      return res.status(403).json({ error: blockCheck.message });
+    }
+
     const result = await prisma.$transaction(async (tx) => {
-      const member = await tx.member.findUnique({ where: { id: memberId } });
-      if (!member) throw Object.assign(new Error('Member not found'), { status: 404 });
+      const memberTx = await tx.member.findUnique({ where: { id: memberId } });
+      if (!memberTx) throw Object.assign(new Error('Member not found'), { status: 404 });
 
       const applied = await applyCampaigns(ACTION_TYPES.EXCHANGE, memberId, points);
       const discounted = points - applied.totalBonus;
       if (discounted < 0) throw Object.assign(new Error('Invalid discount calculation'), { status: 500 });
-      if (member.points < discounted) throw Object.assign(new Error('Insufficient points'), { status: 400 });
+      if (memberTx.points < discounted) throw Object.assign(new Error('Insufficient points'), { status: 400 });
 
       const { consumed, insufficient } = await consumePointsByFIFO(tx, memberId, discounted);
       if (insufficient) {
@@ -464,7 +489,7 @@ router.post('/exchange', authenticate, async (req, res) => {
         data: {
           memberId,
           changePoints: -discounted,
-          balanceAfter: member.points - discounted,
+          balanceAfter: memberTx.points - discounted,
           reason: 'EXCHANGE',
           campaignId: applied.participations.length > 0 ? applied.participations[0].campaignId : null,
         },

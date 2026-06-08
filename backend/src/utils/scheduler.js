@@ -1,5 +1,6 @@
 const logger = require('./logger');
 const { processExpiredPoints, processReminders } = require('./pointsExpiryService');
+const { processExpiredBlacklists } = require('./blacklistService');
 
 const MS_PER_MINUTE = 60 * 1000;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
@@ -7,6 +8,7 @@ const MS_PER_DAY = 24 * MS_PER_HOUR;
 
 let expiryTimer = null;
 let reminderTimer = null;
+let blacklistTimer = null;
 
 const getMsUntilNextRun = (targetHour = 2, targetMinute = 0) => {
   const now = new Date();
@@ -55,10 +57,30 @@ const startReminderScheduler = () => {
   reminderTimer = setTimeout(runHourly, 5000);
 };
 
+const startBlacklistScheduler = () => {
+  if (blacklistTimer) return;
+
+  const runDaily = async () => {
+    try {
+      logger.info('Running daily blacklist auto-release task...');
+      await processExpiredBlacklists();
+    } catch (error) {
+      logger.error('Error in daily blacklist auto-release task', { error: error.message, stack: error.stack });
+    } finally {
+      blacklistTimer = setTimeout(runDaily, MS_PER_DAY);
+    }
+  };
+
+  const initialDelay = getMsUntilNextRun(3, 0);
+  logger.info(`Blacklist auto-release scheduler starting. First run in ${Math.round(initialDelay / 60000)} minutes.`);
+  blacklistTimer = setTimeout(runDaily, initialDelay);
+};
+
 const startAllSchedulers = () => {
   startExpiryScheduler();
   startReminderScheduler();
-  logger.info('All points expiry schedulers started.');
+  startBlacklistScheduler();
+  logger.info('All schedulers started.');
 };
 
 const stopAllSchedulers = () => {
@@ -70,12 +92,17 @@ const stopAllSchedulers = () => {
     clearTimeout(reminderTimer);
     reminderTimer = null;
   }
-  logger.info('All points expiry schedulers stopped.');
+  if (blacklistTimer) {
+    clearTimeout(blacklistTimer);
+    blacklistTimer = null;
+  }
+  logger.info('All schedulers stopped.');
 };
 
 module.exports = {
   startExpiryScheduler,
   startReminderScheduler,
+  startBlacklistScheduler,
   startAllSchedulers,
   stopAllSchedulers,
 };
