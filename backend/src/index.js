@@ -1,10 +1,10 @@
 require('dotenv').config();
 const app = require('./app');
 const logger = require('./utils/logger');
-const { startAllSchedulers } = require('./utils/scheduler');
+const { scheduleAllTasks } = require('./utils/taskScheduler');
 const port = process.env.PORT || 8000;
 
-app.listen(port, () => {
+app.listen(port, async () => {
   logger.info(`Server running on port ${port}`);
-  startAllSchedulers();
+  await scheduleAllTasks();
 });

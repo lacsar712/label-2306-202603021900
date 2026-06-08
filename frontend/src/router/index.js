@@ -88,6 +88,12 @@ const router = createRouter({
           name: 'Blacklist',
           component: () => import('../views/BlacklistManagement.vue'),
         },
+        {
+          path: 'scheduled-tasks',
+          name: 'ScheduledTasks',
+          component: () => import('../views/ScheduledTasks.vue'),
+          meta: { requiresAdmin: true }
+        },
       ],
     },
   ],

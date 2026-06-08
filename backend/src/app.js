@@ -13,6 +13,7 @@ const dashboardRoutes = require('./routes/dashboard');
 const referralRoutes = require('./routes/referrals');
 const templateRoutes = require('./routes/templates');
 const blacklistRoutes = require('./routes/blacklist');
+const scheduledTasksRoutes = require('./routes/scheduledTasks');
 const logger = require('./utils/logger');
 
 const app = express();
@@ -34,6 +35,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/referrals', referralRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/blacklist', blacklistRoutes);
+app.use('/api/scheduled-tasks', scheduledTasksRoutes);
 // Compatibility for /api/stats which was at /api/stats in index.js
 app.use('/api', systemRoutes); 
 

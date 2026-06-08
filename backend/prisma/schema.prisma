@@ -788,3 +788,121 @@ model BlacklistConfig {
 
   @@map("blacklist_configs")
 }
+
+enum ScheduledTaskStatus {
+  RUNNING
+  PAUSED
+  ERROR
+  EXECUTING
+}
+
+enum ScheduledTaskModule {
+  POINTS
+  BLACKLIST
+  CAMPAIGN
+  MEMBER
+  TICKET
+  REFERRAL
+  SYSTEM
+}
+
+model ScheduledTask {
+  id                   Int                 @id @default(autoincrement())
+  name                 String              @unique
+  displayName          String
+  cronExpression       String
+  description          String?
+  module               ScheduledTaskModule @default(SYSTEM)
+  status               ScheduledTaskStatus @default(RUNNING)
+  lastExecutionAt      DateTime?
+  nextExecutionAt      DateTime?
+  lastDurationMs       Int?                @default(0)
+  timeoutSeconds       Int                 @default(300)
+  maxRetryCount        Int                 @default(3)
+  retryIntervalSeconds Int                 @default(60)
+  consecutiveFailures  Int                 @default(0)
+  failureThreshold     Int                 @default(5)
+  handler              String
+  isEnabled            Boolean             @default(true)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  executionLogs        TaskExecutionLog[]
+  dependenciesAsChild  TaskDependency[]    @relation("TaskChildDependencies")
+  dependenciesAsParent TaskDependency[]    @relation("TaskParentDependencies")
+
+  @@index([status])
+  @@index([module])
+  @@map("scheduled_tasks")
+}
+
+enum TaskExecutionStatus {
+  SUCCESS
+  FAILED
+  TIMEOUT
+  SKIPPED
+}
+
+model TaskExecutionLog {
+  id             Int                 @id @default(autoincrement())
+  taskId         Int
+  task           ScheduledTask       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  startedAt      DateTime            @default(now())
+  finishedAt     DateTime?
+  durationMs     Int                 @default(0)
+  status         TaskExecutionStatus
+  processedCount Int                 @default(0)
+  outputSummary  String?
+  errorStack     String?
+  triggeredBy    String?             @default("SYSTEM")
+  retryCount     Int                 @default(0)
+  createdAt      DateTime            @default(now())
+
+  @@index([taskId, createdAt])
+  @@index([status, createdAt])
+  @@map("task_execution_logs")
+}
+
+model TaskDependency {
+  id         Int           @id @default(autoincrement())
+  parentTaskId Int
+  parentTask ScheduledTask @relation("TaskParentDependencies", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  childTaskId  Int
+  childTask  ScheduledTask @relation("TaskChildDependencies", fields: [childTaskId], references: [id], onDelete: Cascade)
+  createdAt  DateTime      @default(now())
+
+  @@unique([parentTaskId, childTaskId])
+  @@index([parentTaskId])
+  @@index([childTaskId])
+  @@map("task_dependencies")
+}
+
+enum SystemNotificationLevel {
+  INFO
+  WARNING
+  URGENT
+}
+
+enum SystemNotificationStatus {
+  UNREAD
+  READ
+  DISMISSED
+}
+
+model SystemNotification {
+  id        Int                     @id @default(autoincrement())
+  title     String
+  content   String
+  level     SystemNotificationLevel @default(INFO)
+  status    SystemNotificationStatus @default(UNREAD)
+  category  String?
+  relatedId Int?
+  userId    Int?
+  createdAt DateTime                @default(now())
+  readAt    DateTime?
+
+  @@index([status])
+  @@index([level])
+  @@index([userId])
+  @@map("system_notifications")
+}

@@ -54,6 +54,10 @@
           <el-icon><CircleClose /></el-icon>
           <span>黑名单管理</span>
         </el-menu-item>
+        <el-menu-item v-if="authStore.isAdmin" index="/scheduled-tasks">
+          <el-icon><Timer /></el-icon>
+          <span>任务监控</span>
+        </el-menu-item>
       </el-menu>
       <div class="sidebar-footer">
         <el-button link @click="handleLogout" class="logout-btn">
@@ -95,7 +99,7 @@
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
-import { DataAnalysis, User, Setting, SwitchButton, UserFilled, Tickets, Present, Histogram, Calendar, Clock, Connection, ChatDotRound, CircleClose } from '@element-plus/icons-vue';
+import { DataAnalysis, User, Setting, SwitchButton, UserFilled, Tickets, Present, Histogram, Calendar, Clock, Connection, ChatDotRound, CircleClose, Timer } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 
 const route = useRoute();
@@ -125,6 +129,7 @@ const currentPageName = computed(() => {
   if (route.path === '/referrals') return '推荐关系管理';
   if (route.path === '/templates') return '通知模板管理';
   if (route.path === '/blacklist') return '黑名单管理';
+  if (route.path === '/scheduled-tasks') return '任务监控';
   return '';
 });
 
