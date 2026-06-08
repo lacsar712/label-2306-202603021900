@@ -65,6 +65,10 @@ model Member {
   referralCodes ReferralCode[]
   referralRewardsAsReferrer ReferralReward[] @relation("ReferrerRewards")
   referralRewardsAsReferee ReferralReward[] @relation("RefereeRewards")
+  referralBindsAsReferrer ReferralBind[] @relation("ReferralBindsAsReferrer")
+  referralBindsAsReferee ReferralBind[] @relation("ReferralBindsAsReferee")
+  referralAnomaliesAsReferrer ReferralAnomaly[] @relation("ReferralAnomaliesAsReferrer")
+  referralAnomaliesAsReferee ReferralAnomaly[] @relation("ReferralAnomaliesAsReferee")
   blacklists Blacklist[]
   blacklistAuditLogs BlacklistAuditLog[]
 
@@ -426,6 +430,8 @@ enum DashboardComponentType {
   STAT_CARD
   LEVEL_DISTRIBUTION
   CHANNEL_PIE
+  CHANNEL_TOP_LIST
+  CHANNEL_ALERTS
   BIRTHDAY_REMINDER
   CAMPAIGN_BANNER
   CHECKIN_TREND
@@ -570,7 +576,9 @@ model ReferralConfig {
 model ReferralAnomaly {
   id              Int                 @id @default(autoincrement())
   referrerId      Int
+  referrer        Member              @relation("ReferralAnomaliesAsReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
   refereeId       Int
+  referee         Member              @relation("ReferralAnomaliesAsReferee", fields: [refereeId], references: [id], onDelete: Cascade)
   type            ReferralAnomalyType
   level           Int?
   detail          Json?
@@ -588,7 +596,9 @@ model ReferralAnomaly {
 model ReferralBind {
   id              Int              @id @default(autoincrement())
   referrerId      Int
+  referrer        Member           @relation("ReferralBindsAsReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
   refereeId       Int              @unique
+  referee         Member           @relation("ReferralBindsAsReferee", fields: [refereeId], references: [id], onDelete: Cascade)
   level           Int              @default(1)
   bindChannel     String?
   referralCodeId  Int?

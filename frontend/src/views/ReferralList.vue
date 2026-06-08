@@ -1104,14 +1104,14 @@ const handleSaveConfig = async () => {
 };
 
 onMounted(async () => {
-  overview.value = await referralStore.fetchOverview();
-  await referralStore.fetchBinds();
-  await referralStore.fetchCodes();
-  await referralStore.fetchRewardRules();
-  await referralStore.fetchAnomalies({ isMarked: false });
-  await loadLeaderboard();
+  overview.value = await referralStore.fetchOverview().catch(() => null);
+  await referralStore.fetchBinds().catch(() => {});
+  await referralStore.fetchCodes().catch(() => {});
+  await referralStore.fetchRewardRules().catch(() => {});
+  await referralStore.fetchAnomalies({ isMarked: false }).catch(() => {});
+  await loadLeaderboard().catch(() => {});
 
-  const config = await referralStore.fetchConfig();
+  const config = await referralStore.fetchConfig().catch(() => null);
   if (config) Object.assign(configForm, config);
 });
 
