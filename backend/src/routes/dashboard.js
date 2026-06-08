@@ -12,6 +12,45 @@ const daysAgo = (days) => {
   return d;
 };
 
+const endOfToday = () => {
+  const d = new Date();
+  d.setHours(23, 59, 59, 999);
+  return d;
+};
+
+const parseTimeRange = (timeRange) => {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const end = endOfToday();
+  switch (timeRange) {
+    case 'today':
+      return { start: today, end };
+    case '7days':
+      return { start: daysAgo(6), end };
+    case '30days':
+      return { start: daysAgo(29), end };
+    case '90days':
+      return { start: daysAgo(89), end };
+    default:
+      return null;
+  }
+};
+
+const parseExpiryRange = (timeRange) => {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  switch (timeRange) {
+    case 'today':
+      return { shortDays: 1, longDays: 1 };
+    case '7days':
+      return { shortDays: 1, longDays: 7 };
+    case '30days':
+      return { shortDays: 7, longDays: 30 };
+    case '90days':
+      return { shortDays: 30, longDays: 90 };
+    default:
+      return { shortDays: 7, longDays: 30 };
+  }
+};
+
 const getDefaultComponents = () => [
   { type: 'STAT_CARD', title: '总会员数', x: 0, y: 0, width: 3, height: 3, visible: true, refreshInterval: 60, order: 0, config: { statType: 'TOTAL_MEMBERS' } },
   { type: 'STAT_CARD', title: '活跃会员', x: 3, y: 0, width: 3, height: 3, visible: true, refreshInterval: 60, order: 1, config: { statType: 'ACTIVE_MEMBERS' } },
@@ -344,11 +383,20 @@ router.get('/data/campaign-banner', authenticate, async (req, res) => {
 
 router.get('/data/checkin-trend', authenticate, async (req, res) => {
   try {
-    const { days = 7 } = req.query;
-    const daysNum = parseInt(days);
-    const startDate = daysAgo(daysNum - 1);
+    const { days = 7, timeRange } = req.query;
+    const range = parseTimeRange(timeRange);
+    let startDate, daysNum;
+    if (range) {
+      startDate = range.start;
+      const msPerDay = 86400000;
+      daysNum = Math.max(1, Math.round((range.end - range.start) / msPerDay) + 1);
+    } else {
+      daysNum = parseInt(days);
+      startDate = daysAgo(daysNum - 1);
+    }
+    const endDate = new Date(startDate); endDate.setDate(endDate.getDate() + daysNum);
     const signins = await prisma.memberSignin.findMany({
-      where: { signinDate: { gte: startDate } },
+      where: { signinDate: { gte: startDate, lt: endDate } },
       orderBy: { signinDate: 'asc' },
     });
     const map = {};
@@ -371,22 +419,26 @@ router.get('/data/checkin-trend', authenticate, async (req, res) => {
 
 router.get('/data/ticket-sla', authenticate, async (req, res) => {
   try {
+    const { timeRange } = req.query;
+    const range = parseTimeRange(timeRange);
     const now = new Date();
+    const baseWhere = { status: { notIn: ['CLOSED', 'REJECTED'] } };
+    if (range) {
+      baseWhere.createdAt = { gte: range.start, lte: range.end };
+    }
     const overdue = await prisma.ticket.count({
-      where: { status: { notIn: ['CLOSED', 'REJECTED'] }, slaDeadline: { lt: now } },
+      where: { ...baseWhere, slaDeadline: { lt: now } },
     });
-    const totalOpen = await prisma.ticket.count({
-      where: { status: { notIn: ['CLOSED', 'REJECTED'] } },
-    });
+    const totalOpen = await prisma.ticket.count({ where: baseWhere });
     const dueSoon = await prisma.ticket.count({
       where: {
-        status: { notIn: ['CLOSED', 'REJECTED'] },
+        ...baseWhere,
         slaDeadline: { gte: now, lte: new Date(now.getTime() + 24 * 3600 * 1000) },
       },
     });
     const byPriority = await prisma.ticket.groupBy({
       by: ['priority'],
-      where: { status: { notIn: ['CLOSED', 'REJECTED'] } },
+      where: baseWhere,
       _count: true,
     });
     res.json({ totalOpen, overdue, dueSoon, byPriority });
@@ -398,11 +450,12 @@ router.get('/data/ticket-sla', authenticate, async (req, res) => {
 
 router.get('/data/points-expiry', authenticate, async (req, res) => {
   try {
+    const { timeRange } = req.query;
     const accessibleIds = await getAccessibleChannelIds(req.user);
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const in7Days = new Date(today); in7Days.setDate(in7Days.getDate() + 7); in7Days.setHours(23, 59, 59, 999);
-    const in30Days = new Date(today); in30Days.setDate(in30Days.getDate() + 30); in30Days.setHours(23, 59, 59, 999);
-    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+    const { shortDays, longDays } = parseExpiryRange(timeRange);
+    const shortDate = new Date(today); shortDate.setDate(shortDate.getDate() + shortDays); shortDate.setHours(23, 59, 59, 999);
+    const longDate = new Date(today); longDate.setDate(longDate.getDate() + longDays); longDate.setHours(23, 59, 59, 999);
 
     const memberWhere = { sourceChannelId: { in: accessibleIds } };
 
@@ -413,17 +466,17 @@ router.get('/data/points-expiry', authenticate, async (req, res) => {
       member: memberWhere,
     };
 
-    const [expiring7d, expiring30d, expiringThisMonth, executionHistory] = await Promise.all([
+    const [expiringShort, expiringLong, expiringTopList, executionHistory] = await Promise.all([
       prisma.pointsLedger.aggregate({
-        where: { ...ledgerBaseWhere, expireAt: { gte: today, lte: in7Days } },
+        where: { ...ledgerBaseWhere, expireAt: { gte: today, lte: shortDate } },
         _sum: { remainingPoints: true },
       }),
       prisma.pointsLedger.aggregate({
-        where: { ...ledgerBaseWhere, expireAt: { gte: today, lte: in30Days } },
+        where: { ...ledgerBaseWhere, expireAt: { gte: today, lte: longDate } },
         _sum: { remainingPoints: true },
       }),
       prisma.pointsLedger.findMany({
-        where: { ...ledgerBaseWhere, expireAt: { gte: today, lte: endOfMonth } },
+        where: { ...ledgerBaseWhere, expireAt: { gte: today, lte: longDate } },
         include: { member: { select: { id: true, name: true, phone: true } } },
         orderBy: { expireAt: 'asc' },
         take: 50,
@@ -435,13 +488,13 @@ router.get('/data/points-expiry', authenticate, async (req, res) => {
     ]);
 
     const affectedMemberIds = new Set();
-    let totalThisMonth = 0;
-    expiringThisMonth.forEach(l => {
+    let totalLong = 0;
+    expiringTopList.forEach(l => {
       affectedMemberIds.add(l.memberId);
-      totalThisMonth += l.remainingPoints;
+      totalLong += l.remainingPoints;
     });
 
-    const topMembers = expiringThisMonth.slice(0, 10).map(l => ({
+    const topMembers = expiringTopList.slice(0, 10).map(l => ({
       memberId: l.memberId,
       memberName: l.member.name,
       memberPhone: l.member.phone,
@@ -450,9 +503,9 @@ router.get('/data/points-expiry', authenticate, async (req, res) => {
     }));
 
     res.json({
-      expiring7Days: expiring7d._sum.remainingPoints || 0,
-      expiring30Days: expiring30d._sum.remainingPoints || 0,
-      expiringThisMonth: totalThisMonth,
+      expiring7Days: expiringShort._sum.remainingPoints || 0,
+      expiring30Days: expiringLong._sum.remainingPoints || 0,
+      expiringThisMonth: totalLong,
       affectedMembersThisMonth: affectedMemberIds.size,
       topMembers,
       executionHistory: executionHistory.map(e => ({

@@ -33,7 +33,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { fetchTicketSLA } from '../../api/dashboard';
 
 const props = defineProps({
@@ -41,15 +41,21 @@ const props = defineProps({
   refreshInterval: { type: Number, default: 120 },
 });
 
+const timeRange = computed(() => props.component?.timeRange || null);
 const data = reactive({ totalOpen: 0, overdue: 0, dueSoon: 0, byPriority: [] });
 let timer = null;
+
+const rangeLabel = computed(() => {
+  const map = { today: '今日', '7days': '近 7 日', '30days': '近 30 日', '90days': '近 90 日' };
+  return map[timeRange.value] || '全部';
+});
 
 const getPriorityLabel = (p) => ({ LOW: '低', MEDIUM: '中', HIGH: '高', URGENT: '紧急' }[p] || p);
 const getPriorityColor = (p) => ({ LOW: '#94a3b8', MEDIUM: '#3b82f6', HIGH: '#f97316', URGENT: '#ef4444' }[p] || '#94a3b8');
 
 const loadData = async () => {
   try {
-    const result = await fetchTicketSLA();
+    const result = await fetchTicketSLA({ timeRange: timeRange.value });
     Object.assign(data, result);
   } catch (e) {
     console.error(e);

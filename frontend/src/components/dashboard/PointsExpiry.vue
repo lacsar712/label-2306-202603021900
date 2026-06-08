@@ -94,7 +94,7 @@
 </template>
 
 <script setup>
-import { reactive, onMounted, onUnmounted } from 'vue';
+import { reactive, computed, onMounted, onUnmounted } from 'vue';
 import { fetchPointsExpiry } from '../../api/dashboard';
 import { WarningFilled, Clock, Calendar, User } from '@element-plus/icons-vue';
 import dayjs from 'dayjs';
@@ -103,6 +103,8 @@ const props = defineProps({
   component: { type: Object, required: true },
   refreshInterval: { type: Number, default: 3600 },
 });
+
+const timeRange = computed(() => props.component?.timeRange || null);
 
 const data = reactive({
   expiring7Days: 0,
@@ -135,7 +137,7 @@ const getHandleTypeTag = (t) => {
 
 const loadData = async () => {
   try {
-    const result = await fetchPointsExpiry();
+    const result = await fetchPointsExpiry({ timeRange: timeRange.value });
     Object.assign(data, result);
   } catch (e) {
     console.error(e);

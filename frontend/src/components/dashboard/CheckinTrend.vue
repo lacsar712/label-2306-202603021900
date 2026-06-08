@@ -1,7 +1,7 @@
 <template>
   <div class="trend-wrap">
     <div class="trend-header">
-      <span class="trend-title">近 {{ days }} 日签到</span>
+      <span class="trend-title">{{ displayRangeLabel }}签到</span>
       <span class="trend-total">累计: {{ total }} 次</span>
     </div>
     <div class="chart-area" v-if="data.length > 0">
@@ -43,8 +43,19 @@ const props = defineProps({
 });
 
 const days = computed(() => props.component?.config?.days || 7);
+const timeRange = computed(() => props.component?.timeRange || null);
 const data = ref([]);
 let timer = null;
+
+const resolvedDays = computed(() => {
+  const map = { today: 1, '7days': 7, '30days': 30, '90days': 90 };
+  return map[timeRange.value] ?? days.value;
+});
+
+const displayRangeLabel = computed(() => {
+  const map = { today: '今日', '7days': '近 7 日', '30days': '近 30 日', '90days': '近 90 日' };
+  return map[timeRange.value] || `近 ${resolvedDays.value} 日`;
+});
 
 const total = computed(() => data.value.reduce((s, i) => s + i.count, 0));
 const max = computed(() => Math.max(...data.value.map(i => i.count), 1));
@@ -84,7 +95,7 @@ const shouldShow = (idx) => {
 
 const loadData = async () => {
   try {
-    data.value = await fetchCheckinTrend({ days: days.value });
+    data.value = await fetchCheckinTrend({ days: resolvedDays.value, timeRange: timeRange.value });
   } catch (e) {
     console.error(e);
   }
